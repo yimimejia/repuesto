@@ -105,11 +105,31 @@ itbis_total += (lineaBruta - desc) - ((lineaBruta - desc) / (1 + Number(i.itbis_
   const total = subtotal - descuento_total;
 
   if (tipo_venta === 'credito') {
-    if (cliente.estatus_credito === 'cerrado') return res.status(400).json({ error: 'Cliente tiene crédito cerrado' });
+    if (!cliente_id) return res.status(400).json({ error: 'Debe seleccionar un cliente para venta a crédito' });
+    if (cliente.estatus_credito !== 'abierto') return res.status(400).json({ error: 'Cliente no está habilitado para ventas a crédito' });
+    if (Number(cliente.limite_credito ?? 0) <= 0) return res.status(400).json({ error: 'Cliente sin límite de crédito disponible' });
     const balance = db.prepare('SELECT COALESCE(SUM(balance_pendiente),0) as b FROM cuentas_por_cobrar WHERE cliente_id=? AND balance_pendiente>0').get(cliente_id) as any;
-    const disponible = Number(cliente.limite_credito ?? 0) - Number(balance.b ?? 0);
-    if (Number(cliente.limite_credito ?? 0) > 0 && total > disponible) {
-      return res.status(400).json({ error: `Límite de crédito excedido. Disponible: ${disponible.toFixed(2)}` });
+    const atraso = db.prepare(`SELECT COALESCE(MAX(CAST(julianday('now') - julianday(COALESCE(fecha_vencimiento, fecha_emision)) AS INTEGER)),0) as atraso
+      FROM cuentas_por_cobrar WHERE cliente_id=? AND balance_pendiente>0 AND julianday('now') > julianday(COALESCE(fecha_vencimiento, fecha_emision))`).get(clienteIdFinal) as any;
+    const diasAtraso = Number(atraso?.atraso ?? 0);
+    let score = 'A';
+    let factor = 1;
+    if (diasAtraso >= 120) { score = 'G'; factor = 0; }
+    else if (diasAtraso >= 90) { score = 'F'; factor = 0.5; }
+    else if (diasAtraso >= 60) { score = 'D'; factor = 0.75; }
+    else if (diasAtraso >= 30) { score = 'C'; factor = 0.85; }
+    else if (diasAtraso >= 7) { score = 'B'; factor = 0.9; }
+    if (cliente.credito_score !== score || Number(cliente.credito_factor ?? 1) !== Number(factor)) {
+      db.prepare('UPDATE clientes SET credito_score=?, credito_factor=?, fecha_actualizacion=? WHERE id=?').run(score, factor, ahora(), clienteIdFinal);
+      db.prepare('INSERT INTO credit_score_logs(id,cliente_id,score_anterior,score_nuevo,factor_anterior,factor_nuevo,dias_atraso,motivo,usuario_id,fecha) VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .run(uuid(), clienteIdFinal, cliente.credito_score ?? null, score, cliente.credito_factor ?? 1, factor, diasAtraso, 'venta_credito_validacion', usuario.id, ahora());
+    }
+
+    const limiteBase = Number(cliente.limite_credito ?? 0);
+    const limiteAjustado = limiteBase * factor;
+    const disponible = limiteAjustado - Number(balance.b ?? 0);
+    if (limiteBase > 0 && total > disponible) {
+      return res.status(400).json({ error: `Límite de crédito excedido para score ${score}. Disponible: ${disponible.toFixed(2)}` });
     }
   }
 

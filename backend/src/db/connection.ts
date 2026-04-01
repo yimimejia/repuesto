@@ -46,6 +46,10 @@ function asegurarMigraciones() {
   agregarColumnaSiFalta('clientes', 'foto_url TEXT', 'foto_url');
   agregarColumnaSiFalta('clientes', 'porcentaje_descuento REAL NOT NULL DEFAULT 0', 'porcentaje_descuento');
   agregarColumnaSiFalta('clientes', "tipo_comprobante_fiscal TEXT NOT NULL DEFAULT 'consumidor_final'", 'tipo_comprobante_fiscal');
+  agregarColumnaSiFalta('clientes', "credito_score TEXT NOT NULL DEFAULT 'A'", 'credito_score');
+  agregarColumnaSiFalta('clientes', "credito_factor REAL NOT NULL DEFAULT 1", 'credito_factor');
+  agregarColumnaSiFalta('clientes', 'cierre_credito_motivo TEXT', 'cierre_credito_motivo');
+  agregarColumnaSiFalta('clientes', 'cierre_credito_detalle TEXT', 'cierre_credito_detalle');
 
   // Extensiones de productos
   agregarColumnaSiFalta('productos', 'ubicacion TEXT', 'ubicacion');
@@ -59,11 +63,15 @@ function asegurarMigraciones() {
   agregarColumnaSiFalta('productos', 'itbis_porcentaje REAL NOT NULL DEFAULT 18', 'itbis_porcentaje');
   agregarColumnaSiFalta('productos', 'existencia_minima REAL NOT NULL DEFAULT 0', 'existencia_minima');
   agregarColumnaSiFalta('productos', 'cantidad_a_ordenar REAL NOT NULL DEFAULT 0', 'cantidad_a_ordenar');
+  agregarColumnaSiFalta('productos', 'precio_negocio_1 REAL NOT NULL DEFAULT 0', 'precio_negocio_1');
+  agregarColumnaSiFalta('productos', 'precio_negocio_2 REAL NOT NULL DEFAULT 0', 'precio_negocio_2');
   agregarColumnaSiFalta('productos', 'codigo_barras TEXT', 'codigo_barras');
   agregarColumnaSiFalta('productos', 'cuenta_contable TEXT', 'cuenta_contable');
   agregarColumnaSiFalta('productos', 'referencia TEXT', 'referencia');
   agregarColumnaSiFalta('productos', 'uso_notas TEXT', 'uso_notas');
   agregarColumnaSiFalta('productos', 'suplidor_principal_id TEXT', 'suplidor_principal_id');
+  db.exec('UPDATE productos SET precio_negocio_1 = precio WHERE COALESCE(precio_negocio_1,0)=0');
+  db.exec('UPDATE productos SET precio_negocio_2 = COALESCE(NULLIF(precio_negocio_1,0), precio) WHERE COALESCE(precio_negocio_2,0)=0');
 
   // Extensiones de ventas
   agregarColumnaSiFalta('ventas', 'sucursal_id TEXT', 'sucursal_id');
@@ -449,6 +457,20 @@ function asegurarMigraciones() {
     mensaje_error TEXT,
     archivo_descargado TEXT,
     hash_archivo TEXT
+  )`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS credit_score_logs (
+    id TEXT PRIMARY KEY,
+    cliente_id TEXT NOT NULL,
+    score_anterior TEXT,
+    score_nuevo TEXT NOT NULL,
+    factor_anterior REAL,
+    factor_nuevo REAL NOT NULL,
+    dias_atraso INTEGER NOT NULL DEFAULT 0,
+    motivo TEXT NOT NULL,
+    usuario_id TEXT,
+    fecha TEXT NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
   )`);
 
   db.exec('CREATE INDEX IF NOT EXISTS idx_clientes_codigo ON clientes(codigo)');

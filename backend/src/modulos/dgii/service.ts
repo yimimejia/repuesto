@@ -180,17 +180,6 @@ function parseCronHourMinute(expr: string) {
   return { minute, hour };
 }
 
-function immediateAllowed() {
-  const now = new Date();
-  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  const count = db.prepare(`SELECT COUNT(*) as c FROM dgii_rnc_sync_log WHERE tipo_ejecucion='validacion_inmediata' AND estado='ok' AND inicio>=?`).get(dayStart.toISOString()) as any;
-  if (Number(count.c) >= 2) return false;
-  const last = db.prepare(`SELECT inicio FROM dgii_rnc_sync_log WHERE tipo_ejecucion='validacion_inmediata' AND estado='ok' ORDER BY inicio DESC LIMIT 1`).get() as any;
-  if (!last?.inicio) return true;
-  const diff = now.getTime() - new Date(last.inicio).getTime();
-  return diff >= 2 * 60 * 60 * 1000;
-}
-
 export async function lookupRnc(rawRnc: string) {
   const rnc = cleanRnc(rawRnc);
   if (!rnc) return { ok: true, found: false, message: 'El RNC ingresado es incorrecto o no existe en el catálogo actual.' };
@@ -198,10 +187,6 @@ export async function lookupRnc(rawRnc: string) {
   const find = () => db.prepare('SELECT * FROM dgii_rnc WHERE rnc=?').get(rnc) as any;
   const row = find();
   if (row) return { ok: true, found: true, data: mapOut(row) };
-
-  if (!immediateAllowed()) {
-    return { ok: true, found: false, message: 'El RNC ingresado es incorrecto o no existe en el catálogo actual.' };
-  }
 
   const sync = await syncCatalog('validacion_inmediata');
   const row2 = find();

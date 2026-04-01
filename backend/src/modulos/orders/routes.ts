@@ -27,6 +27,56 @@ ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscado
   res.json(rows);
 });
 
+ordersRouter.get('/report', permitir('administrador'), (_req, res) => {
+  const rows = db.prepare(`SELECT
+      o.id,
+      o.numero_orden,
+      o.estado,
+      o.fecha_creacion,
+      o.fecha_actualizacion,
+      c.nombre as cliente_nombre,
+      uc.nombre_completo as creado_por,
+      ua.nombre_completo as picker_asignado,
+      uv.nombre_completo as verificador,
+      oa.fecha_creacion as fecha_asignacion,
+      (SELECT MIN(ov.fecha_creacion) FROM order_verifications ov WHERE ov.order_id=o.id) as fecha_inicio_verificacion,
+      (SELECT MAX(ov.fecha_creacion) FROM order_verifications ov WHERE ov.order_id=o.id) as fecha_fin_verificacion,
+      (SELECT MAX(b.fecha_cierre) FROM bundles b WHERE b.order_id=o.id) as fecha_cierre_bultos
+    FROM orders o
+    JOIN clientes c ON c.id=o.cliente_id
+    LEFT JOIN usuarios uc ON uc.id=o.usuario_creador_id
+    LEFT JOIN order_assignments oa ON oa.order_id=o.id
+    LEFT JOIN usuarios ua ON ua.id=oa.picker_usuario_id
+    LEFT JOIN order_verifications ovx ON ovx.order_id=o.id
+    LEFT JOIN usuarios uv ON uv.id=ovx.verifier_usuario_id
+    GROUP BY o.id
+    ORDER BY o.fecha_creacion DESC
+    LIMIT 500`).all() as any[];
+
+  const report = rows.map((r: any) => {
+    const creacion = r.fecha_creacion ? new Date(r.fecha_creacion).getTime() : 0;
+    const asignacion = r.fecha_asignacion ? new Date(r.fecha_asignacion).getTime() : 0;
+    const iniVerif = r.fecha_inicio_verificacion ? new Date(r.fecha_inicio_verificacion).getTime() : 0;
+    const finVerif = r.fecha_fin_verificacion ? new Date(r.fecha_fin_verificacion).getTime() : 0;
+    const cierre = r.fecha_cierre_bultos ? new Date(r.fecha_cierre_bultos).getTime() : 0;
+    const mins = (a: number, b: number) => (a > 0 && b > 0 && b >= a ? Math.round((b - a) / 60000) : null);
+    return {
+      ...r,
+      min_creacion_a_asignacion: mins(creacion, asignacion),
+      min_asignacion_a_inicio_verificacion: mins(asignacion, iniVerif),
+      min_verificacion: mins(iniVerif, finVerif),
+      min_total_hasta_cierre: mins(creacion, cierre),
+    };
+  });
+
+  const promedios = db.prepare(`SELECT
+      ROUND(AVG((julianday(COALESCE((SELECT oa.fecha_creacion FROM order_assignments oa WHERE oa.order_id=o.id ORDER BY oa.fecha_creacion DESC LIMIT 1), o.fecha_creacion)) - julianday(o.fecha_creacion))*24*60),2) as prom_min_creacion_asignacion,
+      ROUND(AVG((julianday(COALESCE((SELECT MAX(b.fecha_cierre) FROM bundles b WHERE b.order_id=o.id), o.fecha_actualizacion)) - julianday(o.fecha_creacion))*24*60),2) as prom_min_total_cierre
+    FROM orders o`).get();
+
+  res.json({ rows: report, promedios });
+});
+
 ordersRouter.post('/', permitir('revendedor', 'administrador', 'al_por_mayor'), (req, res) => {
   const usuario = (req as any).usuario;
   const { cliente_id, items, observaciones, pago_registrado = false } = req.body;
@@ -145,14 +195,56 @@ ordersRouter.get('/:id/bundles/:bundleId/label', permitir('cajero', 'vendedor', 
   });
 });
 
-ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador'), (req, res) => {
+ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vendedor'), permitirCapacidad('can_verify'), (req, res) => {
   const o = db.prepare(`SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo, c.direccion, v.ncf, v.tipo_comprobante
     FROM orders o JOIN clientes c ON c.id=o.cliente_id LEFT JOIN ventas v ON v.id=o.venta_origen_id WHERE o.id=?`).get(req.params.id) as any;
   if (!o) return res.status(404).json({ error: 'Orden no encontrada' });
   const items = db.prepare('SELECT descripcion, cantidad, precio_unitario, (cantidad*precio_unitario) as total FROM order_items WHERE order_id=?').all(req.params.id);
   const bultos = db.prepare('SELECT COUNT(*) as c FROM bundles WHERE order_id=?').get(req.params.id) as any;
+  const fechaDoc = new Date().toLocaleString('es-DO');
+  const total = items.reduce((acc: number, item: any) => acc + Number(item.total || 0), 0);
+  const rows = items.map((it: any, idx: number) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${it.descripcion ?? ''}</td>
+        <td style="text-align:right">${Number(it.cantidad || 0).toFixed(0)}</td>
+        <td style="text-align:right">RD$ ${Number(it.precio_unitario || 0).toFixed(2)}</td>
+        <td style="text-align:right">RD$ ${Number(it.total || 0).toFixed(2)}</td>
+      </tr>`).join('');
   res.json({
-    preview_html: `<html><body><h1>Factura final ${o.numero_orden}</h1><p>Cliente: ${o.cliente_nombre}</p><p>NCF: ${o.ncf ?? '-'}</p><p>Bultos: ${bultos.c}</p></body></html>`,
+    preview_html: `<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Factura final ${o.numero_orden}</title>
+      <style>
+        @page { size: 8.5in 11in; margin: 0.5in; }
+        body { font-family: Arial, sans-serif; color: #111; }
+        h1,h2,p { margin: 0; }
+        .head { margin-bottom: 14px; }
+        .muted { color: #475569; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; }
+        th { background: #f8fafc; text-align: left; }
+        .totales { margin-top: 14px; display: flex; justify-content: flex-end; }
+        .totales div { min-width: 260px; border: 1px solid #cbd5e1; padding: 10px; }
+      </style>
+    </head><body>
+      <div class="head">
+        <h2>Importadora Repuestos Calcaño</h2>
+        <p class="muted">Fecha: ${fechaDoc}</p>
+        <p class="muted">Orden: ${o.numero_orden}</p>
+        <p class="muted">Cliente: ${o.cliente_nombre} (${o.cliente_codigo ?? '-'})</p>
+        <p class="muted">Dirección: ${o.direccion ?? '-'}</p>
+        <p class="muted">NCF: ${o.ncf ?? '-'}</p>
+        <p class="muted">Total bultos empacados: ${bultos.c}</p>
+      </div>
+      <table>
+        <thead>
+          <tr><th>#</th><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="totales">
+        <div><strong>Total general: RD$ ${total.toFixed(2)}</strong></div>
+      </div>
+    </body></html>`,
     data: { orden: o, items, total_bultos: bultos.c },
   });
 });
