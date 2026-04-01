@@ -53,6 +53,7 @@ const menuPorRol: Record<string, MenuItem[]> = {
     { key: 'revendedor', label: 'Catálogo Revendedor', icono: '🛍️', acento: 'verde' },
     { key: 'ordenes', label: 'Órdenes', icono: '📦', acento: 'celeste' },
     { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
+    { key: 'por-vencer', label: 'Por vencer', icono: '⏳', acento: 'rojo' },
     { key: 'cuadrar', label: 'Cuadrar', icono: '⚖️', acento: 'amarillo' },
   ],
   buscador: [
@@ -78,6 +79,7 @@ const menuPorRol: Record<string, MenuItem[]> = {
     { key: 'importador', label: 'Importar SQL', icono: '🧬', acento: 'gris' },
     { key: 'reportes', label: 'Reportes', icono: '📊', acento: 'azul' },
     { key: 'contabilidad', label: 'Contabilidad', icono: '🏦', acento: 'verde' },
+    { key: 'eventos', label: 'Eventos', icono: '🔔', acento: 'rojo' },
   ],
 };
 
@@ -262,6 +264,7 @@ function App() {
   const [devolFiltro, setDevolFiltro] = useState<any>({ modo: 'hoy', fecha: '', mes: '', desde: '', hasta: '', sucursal_id: '', empleado_id: '' });
   const [modalConfigReporte, setModalConfigReporte] = useState<'historial-ventas' | 'devoluciones' | ''>('');
   const [modalAplicarNC, setModalAplicarNC] = useState(false);
+  const [eventos, setEventos] = useState<any[]>([]);
   const [codigoNC, setCodigoNC] = useState('');
   const [ncEncontrada, setNcEncontrada] = useState<any>(null);
   const [modalNcDiferencia, setModalNcDiferencia] = useState<any>(null);
@@ -341,8 +344,8 @@ function App() {
     setPickers(pks);
     setOrdenesReporte(ordRep);
     if (usuario.rol === 'administrador') {
-      const [cm, us, rs, ij, im, cua, va] = await Promise.all([api<any[]>('/compras', token).catch(() => []), api<any[]>('/usuarios', token).catch(() => []), api<any[]>('/usuarios/roles', token).catch(() => []), api<any[]>('/importador/jobs', token).catch(() => []), api<any>('/importador/meta', token).catch(() => null), api<any[]>('/cuadres', token).catch(() => []), api<any[]>('/ventas', token).catch(() => [])]);
-      setCompras(cm); setUsuarios(us); setRoles(rs); setImportJobs(ij); setImportMeta(im); setCuadres(cua); setVentasAll(va);
+      const [cm, us, rs, ij, im, cua, va, evs] = await Promise.all([api<any[]>('/compras', token).catch(() => []), api<any[]>('/usuarios', token).catch(() => []), api<any[]>('/usuarios/roles', token).catch(() => []), api<any[]>('/importador/jobs', token).catch(() => []), api<any>('/importador/meta', token).catch(() => null), api<any[]>('/cuadres', token).catch(() => []), api<any[]>('/ventas', token).catch(() => []), api<any[]>('/eventos', token).catch(() => [])]);
+      setCompras(cm); setUsuarios(us); setRoles(rs); setImportJobs(ij); setImportMeta(im); setCuadres(cua); setVentasAll(va); setEventos(evs);
       const keys = ['clientes', 'suplidores', 'productos', 'inventario-sucursal', 'compras-por-suplidor', 'compras-por-sucursal', 'ventas-por-sucursal', 'eficiencia-vendedores', 'cxc', 'existencia-minima', 'base-606'];
       const out: Record<string, any[]> = {};
       await Promise.all(keys.map(async (k) => { out[k] = await api<any[]>(`/reportes/${k}`, token).catch(() => []); }));
@@ -354,9 +357,17 @@ function App() {
   useEffect(() => {
     if (!token) return;
     const ws = new WebSocket(WS_URL);
-    ws.onmessage = () => { cargarTodo(); };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (usuario?.rol === 'administrador' && msg?.evento) {
+          toast('ok', `🔔 ${String(msg.evento)} · ${new Date(msg?.fecha || Date.now()).toLocaleString()}`);
+        }
+      } catch { }
+      cargarTodo();
+    };
     return () => ws.close();
-  }, [token]);
+  }, [token, usuario?.rol]);
 
   const tieneCapacidad = (codigo: string) => Boolean(usuario?.capacidades?.includes(codigo));
 
@@ -1225,6 +1236,11 @@ function App() {
     && (!devolFiltro.sucursal_id || n.venta_sucursal_id === devolFiltro.sucursal_id)
     && (!devolFiltro.empleado_id || n.vendedor_id === devolFiltro.empleado_id)
   );
+  const porVencerRev = cxc.filter((x: any) => {
+    if (Number(x.balance_pendiente ?? 0) <= 0 || !x.fecha_vencimiento) return false;
+    const diff = Math.ceil((new Date(String(x.fecha_vencimiento)).getTime() - Date.now()) / 86400000);
+    return diff >= 0 && diff <= 10;
+  });
 
   const imgSrc = (url: string) => url ? (url.startsWith('http') ? url : url) : '';
 
@@ -3621,9 +3637,9 @@ function App() {
             )}
           </div>
           <table className="table-premium">
-            <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Total</th><th>Beneficio</th><th>Estado</th></tr></thead>
+            <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Total</th><th>Beneficio</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {historialFiltrado.length === 0 ? <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24 }}>No hay ventas registradas</td></tr> : historialFiltrado.map((v: any) => (
+              {historialFiltrado.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24 }}>No hay ventas registradas</td></tr> : historialFiltrado.map((v: any) => (
                 <tr key={v.id} style={{ cursor: 'pointer' }} onClick={async () => setVentaDetalleModal(await api<any>(`/ventas/${v.id}`, token).catch(() => null))}>
                   <td><strong>{v.numero_interno || v.id?.substring(0, 8)}</strong></td>
                   <td>{v.fecha_creacion ? String(v.fecha_creacion).substring(0, 10) : '-'}</td>
@@ -3633,6 +3649,7 @@ function App() {
                   <td>RD$ {Number(v.total ?? 0).toFixed(2)}</td>
                   <td style={{ color: Number(v.beneficio ?? 0) < 0 ? 'var(--rojo-600)' : 'var(--success)', fontWeight: 700 }}>RD$ {Number(v.beneficio ?? 0).toFixed(2)}</td>
                   <td>{v.estado}</td>
+                  <td><button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); imprimirFacturaVenta(v.id, String(v.forma_pago ?? 'efectivo'), Number(v.total ?? 0), 0).catch((er) => toast('error', er.message)); }}>Reimprimir</button></td>
                 </tr>
               ))}
             </tbody>
@@ -3672,6 +3689,42 @@ function App() {
                   <td>{n.venta_fecha ? new Date(n.venta_fecha).toLocaleString() : '-'}</td>
                   <td>{n.fecha_creacion ? new Date(n.fecha_creacion).toLocaleString() : '-'}</td>
                   <td>RD$ {money(Number(n.monto_original || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
+      )}
+      {modulo === 'por-vencer' && usuario.rol === 'revendedor' && (
+        <article className="panel-card">
+          <div className="panel-head"><h3>Facturas por vencer (10 días)</h3><span className="chip chip-warning">{porVencerRev.length} facturas</span></div>
+          <table className="table-premium">
+            <thead><tr><th>Factura</th><th>Cliente</th><th>Vence</th><th>Días</th><th>Pendiente</th><th>Acción</th></tr></thead>
+            <tbody>
+              {porVencerRev.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin facturas por vencer</td></tr> : porVencerRev.map((x: any) => {
+                const dias = Math.ceil((new Date(String(x.fecha_vencimiento)).getTime() - Date.now()) / 86400000);
+                return <tr key={x.id}>
+                  <td>{x.numero_interno}</td><td>{x.cliente_nombre}</td><td>{String(x.fecha_vencimiento).slice(0, 10)}</td><td>{dias}</td><td>RD$ {money(Number(x.balance_pendiente || 0))}</td>
+                  <td><button className="btn btn-primary" onClick={() => { cambiarModuloConRuta('cxc'); setTimeout(() => setCxcCobroModal(x), 50); }}>Cobrar</button></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </article>
+      )}
+      {modulo === 'eventos' && usuario.rol === 'administrador' && (
+        <article className="panel-card">
+          <div className="panel-head"><h3>Eventos</h3><span className="chip chip-soft">{eventos.length}</span></div>
+          <table className="table-premium">
+            <thead><tr><th>Fecha/Hora</th><th>Entidad</th><th>Acción</th><th>Descripción</th><th>Usuario</th></tr></thead>
+            <tbody>
+              {eventos.length === 0 ? <tr><td colSpan={5} style={{ textAlign: 'center' }}>Sin eventos</td></tr> : eventos.map((e: any) => (
+                <tr key={e.id}>
+                  <td>{e.fecha_creacion ? new Date(e.fecha_creacion).toLocaleString() : '-'}</td>
+                  <td>{e.entidad}</td>
+                  <td>{e.accion}</td>
+                  <td>{e.descripcion}</td>
+                  <td>{e.usuario_nombre || '-'}</td>
                 </tr>
               ))}
             </tbody>

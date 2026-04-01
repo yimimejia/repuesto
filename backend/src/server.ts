@@ -23,6 +23,7 @@ import { notasCreditoRouter } from './modulos/notas-credito/routes.js';
 import { ncfRouter } from './modulos/ncf/routes.js';
 import { ordersRouter } from './modulos/orders/routes.js';
 import { dgiiRouter } from './modulos/dgii/routes.js';
+import { eventosRouter } from './modulos/eventos/routes.js';
 import { startDgiiSyncJob } from './modulos/dgii/service.js';
 
 inicializarSeed();
@@ -51,6 +52,7 @@ app.use('/api/notas-credito', notasCreditoRouter);
 app.use('/api/ncf', ncfRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/dgii', dgiiRouter);
+app.use('/api/eventos', eventosRouter);
 
 const server = http.createServer(app);
 iniciarHub(server);
