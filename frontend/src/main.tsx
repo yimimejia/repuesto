@@ -286,6 +286,7 @@ function App() {
   const [editandoSuplidor, setEditandoSuplidor] = useState<any>(null);
   const [cxcCobroModal, setCxcCobroModal] = useState<any>(null);
   const [cxcCobroMonto, setCxcCobroMonto] = useState('');
+  const [cxcBuscarCliente, setCxcBuscarCliente] = useState('');
   const [nuevoUsuario, setNuevoUsuario] = useState<any>({ username: '', nombre_completo: '', password: '1234', rol: 'vendedor', sucursal_id: '' });
   const [nuevoSuplidor, setNuevoSuplidor] = useState<any>({ codigo: '', nombre_comercial: '', razon_social: '', rnc_cedula: '', telefono: '', correo: '', direccion: '', contacto: '', observaciones: '' });
   const [nuevaCategoria, setNuevaCategoria] = useState<any>({ codigo: '', nombre: '', descripcion: '' });
@@ -1240,6 +1241,12 @@ function App() {
     if (Number(x.balance_pendiente ?? 0) <= 0 || !x.fecha_vencimiento) return false;
     const diff = Math.ceil((new Date(String(x.fecha_vencimiento)).getTime() - Date.now()) / 86400000);
     return diff >= 0 && diff <= 10;
+  });
+  const cxcFiltrado = cxc.filter((x: any) => {
+    const q = cxcBuscarCliente.toLowerCase().trim();
+    if (!q) return true;
+    const cl = clientes.find((c: any) => c.id === x.cliente_id) as any;
+    return `${x.cliente_nombre ?? ''} ${cl?.codigo ?? ''} ${cl?.telefono_1 ?? ''} ${cl?.telefono_2 ?? ''}`.toLowerCase().includes(q);
   });
 
   const imgSrc = (url: string) => url ? (url.startsWith('http') ? url : url) : '';
@@ -2574,15 +2581,25 @@ function App() {
               </div>
             ))}
           </div>
+          {usuario.rol === 'revendedor' && (
+            <div style={{ marginBottom: 12 }}>
+              <label>Buscar cliente (nombre, código o teléfono)</label>
+              <input
+                placeholder="Ej: yimi, CLI-0001, 809..."
+                value={cxcBuscarCliente}
+                onChange={(e) => setCxcBuscarCliente(e.target.value)}
+              />
+            </div>
+          )}
           <p style={{ color: 'var(--muted)', marginBottom: 12 }}>Todas las facturas emitidas a crédito con su balance actual</p>
           <table className="table-premium">
             <thead>
               <tr><th>Factura</th><th>Cliente</th><th>Fecha</th><th>Vence</th><th>Días restantes</th><th>Monto original</th><th>Balance pendiente</th><th>Estado</th><th>Cobro</th></tr>
             </thead>
             <tbody>
-              {cxc.length === 0 ? (
+              {cxcFiltrado.length === 0 ? (
                 <tr><td colSpan={9} className="empty" style={{ textAlign: 'center', padding: 24 }}>No hay facturas a crédito registradas</td></tr>
-              ) : cxc.map((x) => (
+              ) : cxcFiltrado.map((x) => (
                 <tr key={x.id}>
                   <td><strong>{x.numero_interno}</strong></td>
                   <td>{x.cliente_nombre || '-'}</td>
