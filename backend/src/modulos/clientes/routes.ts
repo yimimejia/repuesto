@@ -56,6 +56,11 @@ clientesRouter.get('/:id', (req, res) => {
   res.json({ cliente: row, historial_ventas: historial });
 });
 
+clientesRouter.get('/:id/score-history', (req, res) => {
+  const rows = db.prepare('SELECT * FROM credit_score_logs WHERE cliente_id=? ORDER BY fecha DESC LIMIT 100').all(req.params.id);
+  res.json(rows);
+});
+
 clientesRouter.post('/', (req, res) => {
   const usuario = (req as any).usuario;
   const data = req.body;
@@ -72,8 +77,8 @@ clientesRouter.post('/', (req, res) => {
   const idExistente = db.prepare('SELECT id FROM clientes WHERE id=?').get(id) as any;
   if (idExistente) return res.status(409).json({ error: 'ID/Código de cliente ya existe' });
   const now = new Date().toISOString();
-  db.prepare(`INSERT INTO clientes(id,codigo,sucursal_id,clase_cliente,cedula_rnc,nombre,representante,direccion,correo,fecha_nacimiento,telefono,telefono_1,telefono_2,limite_credito,limite_tiempo_dias,tipo_cliente,estatus_credito,foto_url,porcentaje_descuento,tipo_comprobante_fiscal,documento,estado,fecha_creacion,fecha_actualizacion,en_programa_fidelidad)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO clientes(id,codigo,sucursal_id,clase_cliente,cedula_rnc,nombre,representante,direccion,correo,fecha_nacimiento,telefono,telefono_1,telefono_2,limite_credito,limite_tiempo_dias,tipo_cliente,estatus_credito,foto_url,porcentaje_descuento,tipo_comprobante_fiscal,documento,estado,fecha_creacion,fecha_actualizacion,en_programa_fidelidad,credito_score,credito_factor,cierre_credito_motivo,cierre_credito_detalle)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(
       id,
       codigo,
@@ -100,6 +105,10 @@ clientesRouter.post('/', (req, res) => {
       now,
       now,
       data.en_programa_fidelidad ? 1 : 0,
+      'A',
+      1,
+      null,
+      null,
     );
   registrarAuditoria('cliente', id, 'crear', `Cliente ${data.nombre} creado`, usuario?.id);
   res.status(201).json({ id });
@@ -119,9 +128,33 @@ clientesRouter.put('/:id', (req, res) => {
   if (codigoExistente) return res.status(409).json({ error: 'Código de cliente ya existe' });
 
   const now = new Date().toISOString();
+  const estatusNuevo = data.estatus_credito ?? current.estatus_credito;
+  const cerrandoCredito = current.estatus_credito === 'abierto' && estatusNuevo === 'cerrado';
+  const motivoCierre = data.cierre_credito_motivo ?? current.cierre_credito_motivo ?? null;
+  const detalleCierre = data.cierre_credito_detalle ?? current.cierre_credito_detalle ?? null;
+  if (cerrandoCredito && usuario?.rol === 'administrador') {
+    if (!motivoCierre || !['sin_causa', 'no_paga'].includes(String(motivoCierre))) {
+      return res.status(400).json({ error: 'Debe indicar motivo de cierre de crédito (sin_causa o no_paga)' });
+    }
+    if (motivoCierre === 'no_paga' && !String(detalleCierre ?? '').trim()) {
+      return res.status(400).json({ error: 'Debe describir la causa cuando el motivo sea no_paga' });
+    }
+  }
+
+  const atraso = db.prepare(`SELECT COALESCE(MAX(CAST(julianday('now') - julianday(COALESCE(fecha_vencimiento, fecha_emision)) AS INTEGER)),0) as atraso
+    FROM cuentas_por_cobrar WHERE cliente_id=? AND balance_pendiente>0 AND julianday('now') > julianday(COALESCE(fecha_vencimiento, fecha_emision))`).get(req.params.id) as any;
+  const diasAtraso = Number(atraso?.atraso ?? 0);
+  let score = 'A';
+  let factor = 1;
+  if (diasAtraso >= 120) { score = 'G'; factor = 0; }
+  else if (diasAtraso >= 90) { score = 'F'; factor = 0.5; }
+  else if (diasAtraso >= 60) { score = 'D'; factor = 0.75; }
+  else if (diasAtraso >= 30) { score = 'C'; factor = 0.85; }
+  else if (diasAtraso >= 7) { score = 'B'; factor = 0.9; }
+
   db.prepare(`UPDATE clientes SET
     codigo=?, sucursal_id=?, clase_cliente=?, cedula_rnc=?, nombre=?, representante=?, direccion=?, correo=?, fecha_nacimiento=?, telefono=?, telefono_1=?, telefono_2=?,
-    limite_credito=?, limite_tiempo_dias=?, tipo_cliente=?, estatus_credito=?, foto_url=?, porcentaje_descuento=?, tipo_comprobante_fiscal=?, documento=?, estado=?, en_programa_fidelidad=?, fecha_actualizacion=?
+    limite_credito=?, limite_tiempo_dias=?, tipo_cliente=?, estatus_credito=?, foto_url=?, porcentaje_descuento=?, tipo_comprobante_fiscal=?, documento=?, estado=?, en_programa_fidelidad=?, fecha_actualizacion=?, credito_score=?, credito_factor=?, cierre_credito_motivo=?, cierre_credito_detalle=?
     WHERE id=?`)
     .run(
       codigo,
@@ -139,7 +172,7 @@ clientesRouter.put('/:id', (req, res) => {
       Number(data.limite_credito ?? current.limite_credito ?? 0),
       Number(data.limite_tiempo_dias ?? current.limite_tiempo_dias ?? 0),
       data.tipo_cliente ?? current.tipo_cliente,
-      data.estatus_credito ?? current.estatus_credito,
+      estatusNuevo,
       data.foto_url ?? current.foto_url,
       Number(data.porcentaje_descuento ?? current.porcentaje_descuento ?? 0),
       data.tipo_comprobante_fiscal ?? current.tipo_comprobante_fiscal,
@@ -147,8 +180,16 @@ clientesRouter.put('/:id', (req, res) => {
       data.estado ?? current.estado,
       data.en_programa_fidelidad !== undefined ? (data.en_programa_fidelidad ? 1 : 0) : (current.en_programa_fidelidad ?? 0),
       now,
+      score,
+      factor,
+      estatusNuevo === 'cerrado' ? motivoCierre : null,
+      estatusNuevo === 'cerrado' ? detalleCierre : null,
       req.params.id,
     );
+  if (current.credito_score !== score || Number(current.credito_factor ?? 1) !== Number(factor)) {
+    db.prepare('INSERT INTO credit_score_logs(id,cliente_id,score_anterior,score_nuevo,factor_anterior,factor_nuevo,dias_atraso,motivo,usuario_id,fecha) VALUES(lower(hex(randomblob(16))),?,?,?,?,?,?,?,?,?)')
+      .run(req.params.id, current.credito_score ?? null, score, current.credito_factor ?? 1, factor, diasAtraso, 'actualizacion_cliente', usuario?.id ?? null, now);
+  }
   registrarAuditoria('cliente', req.params.id, 'editar', `Cliente ${data.nombre ?? current.nombre} actualizado`, usuario?.id);
   res.json({ ok: true });
 });

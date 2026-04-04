@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS productos (
   imagen_url TEXT,
   costo REAL NOT NULL DEFAULT 0,
   precio REAL NOT NULL,
+  precio_negocio_1 REAL NOT NULL DEFAULT 0,
+  precio_negocio_2 REAL NOT NULL DEFAULT 0,
   itbis_tasa REAL NOT NULL DEFAULT 0,
   existencia REAL NOT NULL DEFAULT 0,
   estado TEXT NOT NULL DEFAULT 'activo',

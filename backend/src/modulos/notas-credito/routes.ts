@@ -20,14 +20,18 @@ function generarNumeroNC(): string {
 }
 
 notasCreditoRouter.get('/', permitir('cajero', 'administrador', 'vendedor', 'al_por_mayor'), (req, res) => {
-  const { cliente_id, estado } = req.query;
+  const { cliente_id, estado, fecha_desde, fecha_hasta } = req.query;
   let sql = `SELECT nc.*, c.nombre as cliente_nombre, c.telefono_1 as cliente_telefono
+    , v.numero_interno as venta_numero, v.fecha_creacion as venta_fecha, v.sucursal_id as venta_sucursal_id, v.vendedor_id
     FROM notas_credito nc
     JOIN clientes c ON c.id = nc.cliente_id
+    LEFT JOIN ventas v ON v.id = nc.venta_original_id
     WHERE 1=1`;
   const params: any[] = [];
   if (cliente_id) { sql += ' AND nc.cliente_id = ?'; params.push(cliente_id); }
   if (estado) { sql += ' AND nc.estado = ?'; params.push(estado); }
+  if (fecha_desde) { sql += ' AND date(nc.fecha_creacion) >= date(?)'; params.push(fecha_desde); }
+  if (fecha_hasta) { sql += ' AND date(nc.fecha_creacion) <= date(?)'; params.push(fecha_hasta); }
   sql += ' ORDER BY nc.fecha_creacion DESC LIMIT 200';
   res.json(db.prepare(sql).all(...params));
 });

@@ -20,9 +20,9 @@ usuariosRouter.get('/vendedores', permitir('vendedor', 'cajero', 'administrador'
 });
 
 usuariosRouter.get('/pickers', permitir('cajero', 'administrador'), (_req, res) => {
-  const rows = db.prepare(`SELECT u.id, u.nombre_completo, u.username
+  const rows = db.prepare(`SELECT u.id, u.nombre_completo, u.username, r.nombre as rol
     FROM usuarios u JOIN roles r ON r.id=u.rol_id
-    WHERE u.estado='activo' AND r.nombre='buscador'
+    WHERE u.estado='activo'
     ORDER BY u.nombre_completo ASC`).all();
   res.json(rows);
 });

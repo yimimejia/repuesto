@@ -23,7 +23,7 @@ interface LayoutProps {
 
 export function Layout({ usuario, moduloActivo, onCambiarModulo, onCerrarSesion, menu, tituloModulo, esDashboard, bannerRed, kpis, ocultarSidebar, children }: LayoutProps) {
   return (
-    <div className="layout-shell">
+    <div className={`layout-shell ${ocultarSidebar ? 'no-sidebar' : ''}`}>
       {!ocultarSidebar && <aside className="sidebar-premium">
         <div className="brand-box">
           <img className="brand-image" src="/logo-repuestos-calcano.svg" alt="Logo Repuestos Calcaño" />
@@ -72,6 +72,7 @@ export function Layout({ usuario, moduloActivo, onCambiarModulo, onCerrarSesion,
           <div className="topbar-user-chip">
             <span className="chip chip-user">{usuario.rol}</span>
             <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>{usuario.nombre}</span>
+            <button className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }} onClick={onCerrarSesion}>⏻ Cerrar sesión</button>
           </div>
         </header>
 

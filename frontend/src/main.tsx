@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/theme.css';
@@ -24,10 +25,21 @@ type Categoria = any;
 type Suplidor = any;
 type Vendedor = any;
 type Toast = { id: number; tipo: 'ok' | 'error'; texto: string };
+const money = (n: number) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const scorePorAtraso = (diasAtraso: number) => {
+  if (diasAtraso >= 120) return { grado: 'G', factor: 0 };
+  if (diasAtraso >= 90) return { grado: 'F', factor: 0.5 };
+  if (diasAtraso >= 60) return { grado: 'D', factor: 0.75 };
+  if (diasAtraso >= 30) return { grado: 'C', factor: 0.85 };
+  if (diasAtraso >= 7) return { grado: 'B', factor: 0.9 };
+  return { grado: 'A', factor: 1 };
+};
 
 const menuPorRol: Record<string, MenuItem[]> = {
   vendedor: [
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
+    { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
+    { key: 'cuadrar', label: 'Cuadrar', icono: '⚖️', acento: 'amarillo' },
   ],
   cajero: [
     { key: 'pos', label: 'POS / Caja', icono: '🧾', acento: 'violeta' },
@@ -41,6 +53,9 @@ const menuPorRol: Record<string, MenuItem[]> = {
   revendedor: [
     { key: 'revendedor', label: 'Catálogo Revendedor', icono: '🛍️', acento: 'verde' },
     { key: 'ordenes', label: 'Órdenes', icono: '📦', acento: 'celeste' },
+    { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
+    { key: 'por-vencer', label: 'Por vencer', icono: '⏳', acento: 'rojo' },
+    { key: 'cuadrar', label: 'Cuadrar', icono: '⚖️', acento: 'amarillo' },
   ],
   buscador: [
     { key: 'ordenes', label: 'Órdenes asignadas', icono: '📦', acento: 'celeste' },
@@ -49,7 +64,9 @@ const menuPorRol: Record<string, MenuItem[]> = {
     { key: 'admin-dashboard', label: 'Dashboard', icono: '📈', acento: 'azul' },
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
     { key: 'caja', label: 'Caja / Cobros', icono: '💳', acento: 'celeste' },
+    { key: 'ordenes', label: 'Órdenes / Pedidos', icono: '📦', acento: 'celeste' },
     { key: 'historial-ventas', label: 'Historial de Ventas', icono: '🗂️', acento: 'gris' },
+    { key: 'devoluciones', label: 'Devoluciones', icono: '↩️', acento: 'naranja' },
     { key: 'cxc', label: 'Cuentas por Cobrar', icono: '📒', acento: 'amarillo' },
     { key: 'fidelidad', label: 'Fidelidad', icono: '⭐', acento: 'amarillo' },
     { key: 'productos', label: 'Productos', icono: '🔩', acento: 'verde' },
@@ -63,6 +80,7 @@ const menuPorRol: Record<string, MenuItem[]> = {
     { key: 'importador', label: 'Importar SQL', icono: '🧬', acento: 'gris' },
     { key: 'reportes', label: 'Reportes', icono: '📊', acento: 'azul' },
     { key: 'contabilidad', label: 'Contabilidad', icono: '🏦', acento: 'verde' },
+    { key: 'eventos', label: 'Eventos', icono: '🔔', acento: 'rojo' },
   ],
 };
 
@@ -150,6 +168,8 @@ function App() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [pendientes, setPendientes] = useState<any[]>([]);
   const [cxc, setCxc] = useState<any[]>([]);
+  const [cxcRiesgo, setCxcRiesgo] = useState<any>({ resumen: [], historial: [] });
+  const [cxcCuadreDia, setCxcCuadreDia] = useState<any>({ totales: {}, pagos: [] });
   const [ncfTipos, setNcfTipos] = useState<any[]>([]);
   const [ncfEdit, setNcfEdit] = useState<Record<string, any>>({});
   const [tipoComprobante, setTipoComprobante] = useState('consumidor_final');
@@ -188,15 +208,23 @@ function App() {
   const [rncMensaje, setRncMensaje] = useState('');
   const [dgiiPanel, setDgiiPanel] = useState<any>(null);
   const [ordenes, setOrdenes] = useState<any[]>([]);
+  const [ordenesReporte, setOrdenesReporte] = useState<any>({ rows: [], promedios: {} });
   const [pickers, setPickers] = useState<any[]>([]);
   const [revClienteId, setRevClienteId] = useState('');
   const [revClienteBuscar, setRevClienteBuscar] = useState('');
   const [revPagoRegistrado, setRevPagoRegistrado] = useState(false);
   const [revCarrito, setRevCarrito] = useState<any[]>([]);
+  const [revCarritoAbierto, setRevCarritoAbierto] = useState(false);
+  const [revProductoInfoCard, setRevProductoInfoCard] = useState<any>(null);
+  const [modalCantidadRevProducto, setModalCantidadRevProducto] = useState<any>(null);
+  const [cantidadRevProductoSeleccionada, setCantidadRevProductoSeleccionada] = useState('1');
+  const [revPrecioBiz2Activos, setRevPrecioBiz2Activos] = useState<Record<string, boolean>>({});
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
   const [pickerItems, setPickerItems] = useState<any[]>([]);
   const [bundleActual, setBundleActual] = useState<any>(null);
   const [productoInfoCard, setProductoInfoCard] = useState<any>(null);
+  const [modalCantidadProducto, setModalCantidadProducto] = useState<any>(null);
+  const [cantidadProductoSeleccionado, setCantidadProductoSeleccionado] = useState('1');
   const [editandoProducto, setEditandoProducto] = useState<any>(null);
   const [modalProductoInv, setModalProductoInv] = useState(false);
   const [modalProductosPage, setModalProductosPage] = useState(false);
@@ -233,10 +261,15 @@ function App() {
   const [itemsDevolucionSeleccionados, setItemsDevolucionSeleccionados] = useState<any[]>([]);
   const [ncCreada, setNcCreada] = useState<any>(null);
   const [notasCredito, setNotasCredito] = useState<any[]>([]);
+  const [historialFiltro, setHistorialFiltro] = useState<any>({ modo: 'hoy', fecha: '', mes: '', desde: '', hasta: '', sucursal_id: '', empleado_id: '' });
+  const [devolFiltro, setDevolFiltro] = useState<any>({ modo: 'hoy', fecha: '', mes: '', desde: '', hasta: '', sucursal_id: '', empleado_id: '' });
+  const [modalConfigReporte, setModalConfigReporte] = useState<'historial-ventas' | 'devoluciones' | ''>('');
   const [modalAplicarNC, setModalAplicarNC] = useState(false);
+  const [eventos, setEventos] = useState<any[]>([]);
   const [codigoNC, setCodigoNC] = useState('');
   const [ncEncontrada, setNcEncontrada] = useState<any>(null);
   const [modalNcDiferencia, setModalNcDiferencia] = useState<any>(null);
+  const [ventaDetalleModal, setVentaDetalleModal] = useState<any>(null);
   const [formaPagoComplementario, setFormaPagoComplementario] = useState('efectivo');
   const [montoRecibido, setMontoRecibido] = useState('');
   const [cajaCobrarModal, setCajaCobrarModal] = useState<any>(null);
@@ -247,13 +280,14 @@ function App() {
 
   const NUEVOCLUB_BLANK = { codigo: '', nombre: '', cedula_rnc: '', representante: '', direccion: '', correo: '', fecha_nacimiento: '', telefono_1: '', telefono_2: '', limite_credito: 0, limite_tiempo_dias: 30, tipo_cliente: '', estatus_credito: 'cerrado', porcentaje_descuento: 0, tipo_comprobante_fiscal: 'consumidor_final', en_programa_fidelidad: false };
   const [nuevoCliente, setNuevoCliente] = useState<any>(NUEVOCLUB_BLANK);
-  const [nuevoProducto, setNuevoProducto] = useState<any>({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' });
+  const [nuevoProducto, setNuevoProducto] = useState<any>({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' });
   const [nuevaCompra, setNuevaCompra] = useState<any>({ suplidor_id: '', sucursal_id: '', numero_factura: '', numero_ncf: '', fecha_factura: '', fecha_vencimiento: '', condicion_compra: 'contado', estado_pago: 'pendiente', observaciones: '', items: [] as any[] });
   const [itemCompra, setItemCompra] = useState<any>({ producto_id: '', cantidad: 1, costo_unitario: 0, itbis_tasa: 0.18, descuento_monto: 0 });
   const [modalCompra, setModalCompra] = useState(false);
   const [editandoSuplidor, setEditandoSuplidor] = useState<any>(null);
   const [cxcCobroModal, setCxcCobroModal] = useState<any>(null);
   const [cxcCobroMonto, setCxcCobroMonto] = useState('');
+  const [cxcBuscarCliente, setCxcBuscarCliente] = useState('');
   const [nuevoUsuario, setNuevoUsuario] = useState<any>({ username: '', nombre_completo: '', password: '1234', rol: 'vendedor', sucursal_id: '' });
   const [nuevoSuplidor, setNuevoSuplidor] = useState<any>({ codigo: '', nombre_comercial: '', razon_social: '', rnc_cedula: '', telefono: '', correo: '', direccion: '', contacto: '', observaciones: '' });
   const [nuevaCategoria, setNuevaCategoria] = useState<any>({ codigo: '', nombre: '', descripcion: '' });
@@ -291,7 +325,7 @@ function App() {
     ]);
     setClientes(cs); setProductos(ps); setSucursales(sucs); setCategorias(cats); setSuplidores(sups); setVendedores(vnds); setInventario(invCon);
     if (!sucursalId && sucs[0]) setSucursalId(sucs[0].id);
-    const [pen, cx, kp, historial, adminRes, cf, ncs] = await Promise.all([
+    const [pen, cx, kp, historial, adminRes, cf, ncs, riesgoCxC, cuadreDia] = await Promise.all([
       api<any[]>('/ventas/pendientes', token).catch(() => []),
       api<any[]>('/cxc/pendientes', token).catch(() => []),
       api<any>('/dashboard/kpis', token).catch(() => ({})),
@@ -299,17 +333,21 @@ function App() {
       api<any>('/dashboard/admin-resumen', token).catch(() => ({})),
       api<any[]>('/clientes/fidelidad/lista', token).catch(() => []),
       api<any[]>('/notas-credito', token).catch(() => []),
+      api<any>('/cxc/riesgo-resumen', token).catch(() => ({ resumen: [], historial: [] })),
+      api<any>('/cxc/cuadre-dia', token).catch(() => ({ totales: {}, pagos: [] })),
     ]);
-    setPendientes(pen); setCxc(cx); setKpis(kp); setHistorialVentas(historial); setAdminResumen(adminRes); setClientesFidelidad(cf); setNotasCredito(ncs);
-    const [ords, pks] = await Promise.all([
+    setPendientes(pen); setCxc(cx); setKpis(kp); setHistorialVentas(historial); setAdminResumen(adminRes); setClientesFidelidad(cf); setNotasCredito(ncs); setCxcRiesgo(riesgoCxC); setCxcCuadreDia(cuadreDia);
+    const [ords, pks, ordRep] = await Promise.all([
       api<any[]>('/orders', token).catch(() => []),
       (usuario.rol === 'cajero' || usuario.rol === 'administrador') ? api<any[]>('/usuarios/pickers', token).catch(() => []) : Promise.resolve([]),
+      usuario.rol === 'administrador' ? api<any>('/orders/report', token).catch(() => ({ rows: [], promedios: {} })) : Promise.resolve({ rows: [], promedios: {} }),
     ]);
     setOrdenes(ords);
     setPickers(pks);
+    setOrdenesReporte(ordRep);
     if (usuario.rol === 'administrador') {
-      const [cm, us, rs, ij, im, cua, va] = await Promise.all([api<any[]>('/compras', token).catch(() => []), api<any[]>('/usuarios', token).catch(() => []), api<any[]>('/usuarios/roles', token).catch(() => []), api<any[]>('/importador/jobs', token).catch(() => []), api<any>('/importador/meta', token).catch(() => null), api<any[]>('/cuadres', token).catch(() => []), api<any[]>('/ventas', token).catch(() => [])]);
-      setCompras(cm); setUsuarios(us); setRoles(rs); setImportJobs(ij); setImportMeta(im); setCuadres(cua); setVentasAll(va);
+      const [cm, us, rs, ij, im, cua, va, evs] = await Promise.all([api<any[]>('/compras', token).catch(() => []), api<any[]>('/usuarios', token).catch(() => []), api<any[]>('/usuarios/roles', token).catch(() => []), api<any[]>('/importador/jobs', token).catch(() => []), api<any>('/importador/meta', token).catch(() => null), api<any[]>('/cuadres', token).catch(() => []), api<any[]>('/ventas', token).catch(() => []), api<any[]>('/eventos', token).catch(() => [])]);
+      setCompras(cm); setUsuarios(us); setRoles(rs); setImportJobs(ij); setImportMeta(im); setCuadres(cua); setVentasAll(va); setEventos(evs);
       const keys = ['clientes', 'suplidores', 'productos', 'inventario-sucursal', 'compras-por-suplidor', 'compras-por-sucursal', 'ventas-por-sucursal', 'eficiencia-vendedores', 'cxc', 'existencia-minima', 'base-606'];
       const out: Record<string, any[]> = {};
       await Promise.all(keys.map(async (k) => { out[k] = await api<any[]>(`/reportes/${k}`, token).catch(() => []); }));
@@ -321,9 +359,17 @@ function App() {
   useEffect(() => {
     if (!token) return;
     const ws = new WebSocket(WS_URL);
-    ws.onmessage = () => { cargarTodo(); };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (usuario?.rol === 'administrador' && msg?.evento) {
+          toast('ok', `🔔 ${String(msg.evento)} · ${new Date(msg?.fecha || Date.now()).toLocaleString()}`);
+        }
+      } catch { }
+      cargarTodo();
+    };
     return () => ws.close();
-  }, [token]);
+  }, [token, usuario?.rol]);
 
   const tieneCapacidad = (codigo: string) => Boolean(usuario?.capacidades?.includes(codigo));
 
@@ -338,6 +384,61 @@ function App() {
     if (!q) return clientes.slice(0, 50);
     return clientes.filter((c) => `${c.codigo} ${c.nombre} ${c.telefono_1 ?? ''}`.toLowerCase().includes(q)).slice(0, 50);
   }, [revClienteBuscar, clientes]);
+
+  const hoyISO = new Date().toISOString().slice(0, 10);
+
+  function dentroPeriodo(fechaIso: string | undefined, f: any) {
+    if (!fechaIso) return false;
+    const d = String(fechaIso).slice(0, 10);
+    if (f.modo === 'hoy') return d === hoyISO;
+    if (f.modo === 'dia') return !f.fecha || d === f.fecha;
+    if (f.modo === 'mes') return !f.mes || d.startsWith(f.mes);
+    if (f.modo === 'rango') {
+      if (f.desde && d < f.desde) return false;
+      if (f.hasta && d > f.hasta) return false;
+      return true;
+    }
+    return true;
+  }
+
+  function precioRevNegocio1(p: any) {
+    return Number(p.precio_negocio_1 ?? p.precio_negocio1 ?? p.precio_business_1 ?? p.precio1 ?? p.precio ?? 0);
+  }
+
+  function precioRevNegocio2(p: any) {
+    return Number(p.precio_negocio_2 ?? p.precio_negocio2 ?? p.precio_business_2 ?? p.precio2 ?? p.precio ?? 0);
+  }
+
+  function usaPrecioNegocio2(productoId: string) {
+    return Boolean(revPrecioBiz2Activos[productoId]);
+  }
+
+  function precioRevActual(p: any) {
+    return usaPrecioNegocio2(String(p.id)) ? precioRevNegocio2(p) : precioRevNegocio1(p);
+  }
+
+  function togglePrecioRevendedor(productoId: string) {
+    setRevPrecioBiz2Activos((prev) => ({ ...prev, [productoId]: !prev[productoId] }));
+  }
+
+  function abrirModalCantidadRevendedor(p: any) {
+    setRevProductoInfoCard(p);
+    setModalCantidadRevProducto(p);
+    setCantidadRevProductoSeleccionada('1');
+  }
+
+  function confirmarAgregarCantidadRevendedor() {
+    if (!modalCantidadRevProducto) return;
+    const qty = Math.max(1, Number(cantidadRevProductoSeleccionada || 1));
+    const precio = precioRevActual(modalCantidadRevProducto);
+    setRevCarrito((prev) => {
+      const ex = prev.find((x: any) => x.producto_id === modalCantidadRevProducto.id);
+      if (ex) return prev.map((x: any) => x.producto_id === modalCantidadRevProducto.id ? { ...x, cantidad: x.cantidad + qty, precio_unitario: precio } : x);
+      return [...prev, { producto_id: modalCantidadRevProducto.id, descripcion: modalCantidadRevProducto.nombre, cantidad: qty, precio_unitario: precio, imagen_url: modalCantidadRevProducto.imagen_url }];
+    });
+    setModalCantidadRevProducto(null);
+    setCantidadRevProductoSeleccionada('1');
+  }
 
   async function crearOrdenRevendedor() {
     if (!revClienteId) return toast('error', 'Selecciona un cliente');
@@ -519,6 +620,24 @@ function App() {
     });
   }
 
+  function abrirModalCantidadProducto(p: any) {
+    setProductoInfoCard(p);
+    setModalCantidadProducto(p);
+    setCantidadProductoSeleccionado('1');
+  }
+
+  function confirmarAgregarCantidadProducto() {
+    if (!modalCantidadProducto) return;
+    const qty = Math.max(1, Number(cantidadProductoSeleccionado || 1));
+    setCarrito((prev) => {
+      const x = prev.find((i) => i.producto_id === modalCantidadProducto.id);
+      if (x) return prev.map((i) => i.producto_id === modalCantidadProducto.id ? { ...i, cantidad: i.cantidad + qty } : i);
+      return [...prev, { producto_id: modalCantidadProducto.id, codigo_producto: modalCantidadProducto.codigo, descripcion: modalCantidadProducto.nombre, medida: modalCantidadProducto.medida, cantidad: qty, precio_unitario: Number(modalCantidadProducto.precio), itbis_tasa: Number(modalCantidadProducto.itbis_tasa ?? 0), descuento_monto: 0, imagen_url: modalCantidadProducto.imagen_url }];
+    });
+    setModalCantidadProducto(null);
+    setCantidadProductoSeleccionado('1');
+  }
+
   async function crearCliente() {
     const codigo = nuevoCliente.codigo || autoCodigoCliente(clientes);
     await api('/clientes', token, { method: 'POST', body: JSON.stringify({ ...nuevoCliente, codigo, estatus_credito: nuevoCliente.estatus_credito || 'cerrado' }) });
@@ -546,7 +665,21 @@ function App() {
 
   async function toggleCreditoCliente(c: any) {
     const nuevo = c.estatus_credito === 'abierto' ? 'cerrado' : 'abierto';
-    await api(`/clientes/${c.id}`, token, { method: 'PUT', body: JSON.stringify({ ...c, estatus_credito: nuevo }) });
+    let payload: any = { ...c, estatus_credito: nuevo };
+    if (c.estatus_credito === 'abierto' && nuevo === 'cerrado' && usuario?.rol === 'administrador') {
+      const noPaga = window.confirm('¿Motivo de cierre de crédito: "Este cliente NO paga"?\nAceptar = No paga | Cancelar = No hay ninguna');
+      if (noPaga) {
+        const detalle = window.prompt('Describe la causa del cierre de crédito (obligatorio):', '') || '';
+        if (!detalle.trim()) {
+          toast('error', 'Debes escribir una descripción cuando el motivo es "no paga"');
+          return;
+        }
+        payload = { ...payload, cierre_credito_motivo: 'no_paga', cierre_credito_detalle: detalle.trim() };
+      } else {
+        payload = { ...payload, cierre_credito_motivo: 'sin_causa', cierre_credito_detalle: '' };
+      }
+    }
+    await api(`/clientes/${c.id}`, token, { method: 'PUT', body: JSON.stringify(payload) });
     toast('ok', `Crédito ${nuevo} para ${c.nombre}`);
     await cargarTodo();
   }
@@ -835,25 +968,66 @@ function App() {
           ${detalle.map((d: any) => {
             const cantidad = Number(d.cantidad || 0);
             const totalLinea = Number(d.subtotal_linea || 0);
-            const netoUnitario = cantidad > 0 ? (totalLinea / cantidad) : 0;
-            return `<tr><td colspan="5">${d.descripcion}</td></tr><tr><td>${cantidad.toFixed(0)}</td><td>${Number(d.precio_unitario).toFixed(2)}</td><td>${Number(d.itbis_monto).toFixed(2)}</td><td>${netoUnitario.toFixed(2)}</td><td class="right">${totalLinea.toFixed(2)}</td></tr>`;
+            const itbisLinea = Number(d.itbis_monto || 0);
+            const totalConItbis = totalLinea + itbisLinea;
+            const netoUnitario = cantidad > 0 ? (totalConItbis / cantidad) : 0;
+            return `<tr><td colspan="5">${d.descripcion}</td></tr><tr><td>${cantidad.toFixed(0)}</td><td>${money(Number(d.precio_unitario))}</td><td>${money(itbisLinea)}</td><td>${money(netoUnitario)}</td><td class="right">${money(totalConItbis)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
       <div class="line"></div>
       <table class="tot">
-        <tr><td>SUB TOTAL</td><td class="right">${subtotal.toFixed(2)}</td></tr>
-        <tr><td>DESCUENTO</td><td class="right">${descuento.toFixed(2)}</td></tr>
+        <tr><td>SUB TOTAL</td><td class="right">${money(subtotal)}</td></tr>
+        <tr><td>DESCUENTO</td><td class="right">${money(descuento)}</td></tr>
         <tr><td>RECARGO</td><td class="right">0.00</td></tr>
-        <tr><td>ITBIS</td><td class="right">${itbis.toFixed(2)}</td></tr>
-        <tr><td style="font-size:18px;">TOTAL</td><td class="right" style="font-size:22px;">${total.toFixed(2)}</td></tr>
-        <tr><td>PAGO</td><td class="right">${Number(pagoCliente).toFixed(2)}</td></tr>
-        <tr><td>DEVUELTA</td><td class="right">${Number(devuelta).toFixed(2)}</td></tr>
+        <tr><td>ITBIS</td><td class="right">${money(itbis)}</td></tr>
+        <tr><td style="font-size:18px;">TOTAL</td><td class="right" style="font-size:22px;">${money(total)}</td></tr>
+        <tr><td>PAGO</td><td class="right">${money(Number(pagoCliente))}</td></tr>
+        <tr><td>DEVUELTA</td><td class="right">${money(Number(devuelta))}</td></tr>
       </table>
       <div class="line"></div>
       <div class="center">GRACIAS POR SU COMPRA</div>
       ${Number(puntosCliente) > 0 ? `<div class="center">PUNTOS ACUMULADOS: ${Number(puntosCliente).toLocaleString('es-DO')}</div>` : ''}
     </body></html>`);
+    w.document.close();
+    await esperarRecursosImpresion(w);
+    w.focus();
+    w.print();
+  }
+
+  function imprimirEtiquetaBulto(etiqueta: any) {
+    const w = window.open('', '_blank', 'width=420,height=620');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Etiqueta bulto ${etiqueta?.bulto ?? ''}</title>
+      <style>
+        @page { size: 4in 6in; margin: 10mm; }
+        body { font-family: Arial, sans-serif; padding: 12px; color: #111; }
+        h2 { margin: 0 0 6px; font-size: 20px; }
+        p { margin: 4px 0; font-size: 14px; }
+        .bulto { margin-top: 24px; border-top: 2px solid #111; padding-top: 16px; text-align: center; }
+        .bulto strong { font-size: 34px; letter-spacing: 2px; }
+      </style>
+    </head><body>
+      <h2>Importadora Repuestos Calcaño</h2>
+      <p><strong>Fecha:</strong> ${etiqueta?.fecha ?? '-'}</p>
+      <p><strong>Código cliente:</strong> ${etiqueta?.cliente_codigo ?? '-'}</p>
+      <p><strong>Cliente:</strong> ${etiqueta?.cliente_nombre ?? '-'}</p>
+      <p><strong>Dirección:</strong> ${etiqueta?.direccion ?? '-'}</p>
+      <div class="bulto">
+        <p>Bulto</p>
+        <strong>${etiqueta?.bulto ?? '-'}</strong>
+      </div>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
+  async function imprimirFacturaOrdenFinal(orderId: string) {
+    const data = await api<any>(`/orders/${orderId}/final-invoice`, token);
+    const w = window.open('', '_blank', 'width=1024,height=768');
+    if (!w) return;
+    w.document.write(data.preview_html || '<html><body><p>No hay vista previa.</p></body></html>');
     w.document.close();
     await esperarRecursosImpresion(w);
     w.focus();
@@ -874,8 +1048,26 @@ function App() {
       return { ...i, descuento_monto: descItem + descGlob };
     });
     const formaPagoFinal = usuario.rol === 'vendedor' ? 'pendiente' : formaPago;
+    if (tipoVenta === 'credito') {
+      const cSel = clientes.find((c: any) => c.id === clienteId);
+      if (!cSel) return toast('error', 'Debes seleccionar un cliente para vender a crédito');
+      if (String(cSel.estatus_credito || '') !== 'abierto') return toast('error', 'Este cliente no está habilitado para crédito');
+      if (Number(cSel.limite_credito || 0) <= 0) return toast('error', 'Este cliente no tiene límite de crédito disponible');
+    }
+    if (tipoVenta === 'credito' && clienteId) {
+      const clienteCxC = cxc.filter((x: any) => x.cliente_id === clienteId && Number(x.balance_pendiente) > 0);
+      const maxAtraso = clienteCxC.reduce((m: number, x: any) => Math.max(m, Math.max(0, -Number(x.dias_restantes ?? 0))), 0);
+      const score = scorePorAtraso(maxAtraso);
+      if (score.grado !== 'A') {
+        const limiteBase = Number((clientes.find((cl: any) => cl.id === clienteId)?.limite_credito) ?? 0);
+        const limiteAjustado = limiteBase * score.factor;
+        const ok = window.confirm(`⚠️ Este cliente está en grado ${score.grado} por atrasos (${maxAtraso} días).\nLímite ajustado: RD$ ${money(limiteAjustado)}.\n\n¿Desea continuar con la venta a crédito?`);
+        if (!ok) return;
+      }
+    }
     if (tipoComprobante !== 'consumidor_final' && !fiscalRnc.trim()) { toast('error', 'RNC obligatorio para comprobante fiscal'); return; }
-    if (tipoComprobante !== 'consumidor_final' && !fiscalEmpresa.trim()) { toast('error', 'No se pudo autocompletar la empresa con ese RNC'); return; }
+    if (tipoComprobante !== 'consumidor_final' && rncEstado === 'no_encontrado') { toast('error', 'El RNC ingresado es incorrecto o no existe en el catálogo actual.'); return; }
+    if (tipoComprobante !== 'consumidor_final' && (rncEstado === 'consultando' || rncEstado === 'actualizando')) { toast('error', 'Espere la validación del RNC antes de facturar.'); return; }
     const payload = { cliente_id: clienteId || null, cliente_nombre_libre: clienteNombreLibre?.trim() || 'PORTADOR', fiscal_rnc: fiscalRnc.trim() || null, fiscal_empresa: fiscalEmpresa.trim() || null, sucursal_id: sucursalId, vendedor_id: vendedorId, tipo_venta: tipoVenta, forma_pago: formaPagoFinal, items: carritoFinal, tipo_comprobante: tipoComprobante, nota_credito_codigo: ncEncontrada?.numero };
     const v = await api<any>('/ventas', token, { method: 'POST', body: JSON.stringify(payload) });
     if (tipoVenta === 'contado') {
@@ -1020,10 +1212,13 @@ function App() {
   }} />;
 
   function cambiarModuloConRuta(key: string) {
+    const permitidos = new Set(menu.map((m) => m.key));
+    if (!permitidos.has(key) && key !== 'pos') return;
     setModulo(key);
     localStorage.setItem('pos_modulo', key);
     const ruta = rutaDesdeModulo(key, usuario.rol);
     window.history.pushState({}, '', ruta);
+    if (key === 'historial-ventas' || key === 'devoluciones') setModalConfigReporte(key);
   }
 
   const menuBase = menuPorRol[usuario.rol] ?? [];
@@ -1032,6 +1227,28 @@ function App() {
     menu.push({ key: 'pendiente-verificar', label: 'Pendiente verificar', icono: '✅', acento: 'verde' });
   }
   const kpiCards = [{ titulo: 'Pendientes', valor: String(kpis.ventas_pendientes ?? 0), subtitulo: 'Ventas en cola', tono: 'azul' as const }, { titulo: 'Caja esperada', valor: `RD$ ${Number(kpis.caja_esperada ?? 0).toFixed(2)}`, subtitulo: 'Efectivo proyectado', tono: 'verde' as const }, { titulo: 'Crédito', valor: `RD$ ${Number(kpis.ventas_credito ?? 0).toFixed(2)}`, subtitulo: 'Ventas crédito', tono: 'rojo' as const }, { titulo: 'Cobros', valor: `${Number(kpis.cobros_cantidad ?? 0)}`, subtitulo: `RD$ ${Number(kpis.cobros_total ?? 0).toFixed(2)}`, tono: 'gris' as const }, { titulo: 'Beneficio', valor: `RD$ ${Number(kpis.beneficio_neto ?? 0).toFixed(2)}`, subtitulo: 'Ganancia neta', tono: 'azul' as const }];
+  const historialBase = usuario.rol === 'administrador' ? ventasAll : historialVentas;
+  const historialFiltrado = historialBase.filter((v: any) =>
+    dentroPeriodo(v.fecha_creacion, historialFiltro)
+    && (!historialFiltro.sucursal_id || v.sucursal_id === historialFiltro.sucursal_id)
+    && (!historialFiltro.empleado_id || v.vendedor_id === historialFiltro.empleado_id)
+  );
+  const devolucionesFiltradas = notasCredito.filter((n: any) =>
+    dentroPeriodo(n.fecha_creacion, devolFiltro)
+    && (!devolFiltro.sucursal_id || n.venta_sucursal_id === devolFiltro.sucursal_id)
+    && (!devolFiltro.empleado_id || n.vendedor_id === devolFiltro.empleado_id)
+  );
+  const porVencerRev = cxc.filter((x: any) => {
+    if (Number(x.balance_pendiente ?? 0) <= 0 || !x.fecha_vencimiento) return false;
+    const diff = Math.ceil((new Date(String(x.fecha_vencimiento)).getTime() - Date.now()) / 86400000);
+    return diff >= 0 && diff <= 10;
+  });
+  const cxcFiltrado = cxc.filter((x: any) => {
+    const q = cxcBuscarCliente.toLowerCase().trim();
+    if (!q) return true;
+    const cl = clientes.find((c: any) => c.id === x.cliente_id) as any;
+    return `${x.cliente_nombre ?? ''} ${cl?.codigo ?? ''} ${cl?.telefono_1 ?? ''} ${cl?.telefono_2 ?? ''}`.toLowerCase().includes(q);
+  });
 
   const imgSrc = (url: string) => url ? (url.startsWith('http') ? url : url) : '';
 
@@ -1045,6 +1262,8 @@ function App() {
       <div><label>Ubicación en almacén</label><input placeholder="Ej: Estante A-3, Pasillo 2" value={data.ubicacion || ''} onChange={(e) => onChange('ubicacion', e.target.value)} /></div>
       <div><label>Costo de compra (RD$)</label><input type="number" placeholder="0.00" value={data.costo || 0} onChange={(e) => onChange('costo', Number(e.target.value))} /></div>
       <div><label>Precio de venta (RD$) *</label><input type="number" placeholder="0.00" value={data.precio || 0} onChange={(e) => onChange('precio', Number(e.target.value))} /></div>
+      <div><label>Precio negocio #1 (RD$)</label><input type="number" placeholder="0.00" value={data.precio_negocio_1 || 0} onChange={(e) => onChange('precio_negocio_1', Number(e.target.value))} /></div>
+      <div><label>Precio negocio #2 (RD$)</label><input type="number" placeholder="0.00" value={data.precio_negocio_2 || 0} onChange={(e) => onChange('precio_negocio_2', Number(e.target.value))} /></div>
       <div><label>% ITBIS (0 si exento)</label><input type="number" placeholder="18" value={data.itbis_porcentaje ?? 18} onChange={(e) => onChange('itbis_porcentaje', Number(e.target.value))} /></div>
       <div><label>Código de barras</label><input placeholder="Ej: 7896543210123" value={data.codigo_barras || ''} onChange={(e) => onChange('codigo_barras', e.target.value)} /></div>
       <div><label>Existencia mínima</label><input type="number" placeholder="Cantidad mínima para alerta" value={data.existencia_minima || 0} onChange={(e) => onChange('existencia_minima', Number(e.target.value))} /></div>
@@ -1152,12 +1371,18 @@ function App() {
                   setNcEncontrada(null);
                   setModalAplicarNC(true);
                 }
+                if (v === 'devolucion') {
+                  setTipoVenta('devolucion');
+                  setModalDevolucion(true);
+                  setFormaPago('efectivo');
+                }
               }}>
                 <option value="efectivo">Efectivo</option>
                 <option value="tarjeta">Tarjeta</option>
                 <option value="transferencia">Transferencia</option>
                 <option value="mixto">Mixto</option>
                 <option value="nota_credito">📄 Nota de Crédito</option>
+                <option value="devolucion">↩️ Devolución</option>
               </select>
             </div>}
             <div>
@@ -1217,7 +1442,7 @@ function App() {
                   <div className="producto-info-detalles" style={{ marginTop: 4 }}>
                     <span>📍 Ubicación: <strong>{productoInfoCard.ubicacion || 'Sin ubicación'}</strong></span>
                     <span>📦 Existencia: <strong>{Number(productoInfoCard.existencia || 0).toFixed(2)}</strong></span>
-                    <span>💰 Precio: <strong>RD$ {Number(productoInfoCard.precio).toFixed(2)}</strong></span>
+                    <span>💰 Precio: <strong>RD$ {money(Number(productoInfoCard.precio))}</strong></span>
                     <span>📐 Medida: <strong>{productoInfoCard.medida || 'UND'}</strong></span>
                   </div>
                 </div>
@@ -1227,13 +1452,19 @@ function App() {
 
           <div className="product-grid">
             {productosFiltrados.slice(0, 18).map((p) => (
-              <button key={p.id} className="product-pill" onClick={() => agregarProducto(p)}>
+              <button
+                key={p.id}
+                className="product-pill"
+                onClick={() => setProductoInfoCard(p)}
+                onDoubleClick={() => abrirModalCantidadProducto(p)}
+                title="1 clic: ver datos · 2 clics: agregar con cantidad"
+              >
                 {p.imagen_url
                   ? <img src={imgSrc(p.imagen_url)} alt={p.nombre} style={{ width: '100%', height: 56, objectFit: 'cover', borderRadius: 6, marginBottom: 4 }} />
                   : <div style={{ width: '100%', height: 56, background: '#f0f0f0', borderRadius: 6, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#999' }}>Sin imagen</div>}
                 <strong style={{ fontSize: 11 }}>{p.codigo}</strong>
                 <span style={{ fontSize: 12, lineHeight: 1.2 }}>{p.nombre}</span>
-                <small>Stock: {Number(p.existencia || 0).toFixed(0)} · RD$ {Number(p.precio).toFixed(2)}</small>
+                <small>Stock: {Number(p.existencia || 0).toFixed(0)} · RD$ {money(Number(p.precio))}</small>
               </button>
             ))}
           </div>
@@ -1303,7 +1534,7 @@ function App() {
           <div className="money-line"><span>Balance pendiente</span><strong>RD$ {tipoVenta === 'credito' ? total.toFixed(2) : '0.00'}</strong></div>
           <div className="money-line"><span>Estado</span><strong>{tipoVenta === 'credito' ? 'Crédito' : 'Contado'}</strong></div>
 
-          {usuario.rol !== 'vendedor' && (formaPago === 'efectivo' || formaPago === 'mixto') && tipoVenta === 'contado' && (() => {
+          {usuario.rol === 'cajero' && (formaPago === 'efectivo' || formaPago === 'mixto') && tipoVenta === 'contado' && (() => {
             const totalCobrar = formaPago === 'nota_credito' && ncEncontrada
               ? Math.max(0, total - Math.min(Number(ncEncontrada.monto_restante), total))
               : total;
@@ -1357,6 +1588,38 @@ function App() {
           )}
         </article>
       </div>}
+
+      {modalCantidadProducto && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setModalCantidadProducto(null); }}>
+          <div className="modal-card" style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h3>Agregar producto al pedido</h3>
+              <button className="btn btn-ghost" onClick={() => setModalCantidadProducto(null)}>✕</button>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <strong>{modalCantidadProducto.nombre}</strong>
+              <div style={{ marginTop: 4, color: 'var(--muted)', fontSize: 13 }}>
+                📍 {modalCantidadProducto.ubicacion || 'Sin ubicación'} · 💰 RD$ {Number(modalCantidadProducto.precio || 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <label>Cantidad vendida</label>
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                value={cantidadProductoSeleccionado}
+                onChange={(e) => setCantidadProductoSeleccionado(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmarAgregarCantidadProducto(); }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setModalCantidadProducto(null)}>Cancelar</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmarAgregarCantidadProducto}>Agregar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {posClienteNuevoModal && (
         <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setPosClienteNuevoModal(false); }}>
@@ -1765,7 +2028,8 @@ function App() {
         const recibNum = parseFloat(cajaMontoRecibido) || 0;
         const mixtoEfectivo = Math.max(0, Number(cajaMixtoEfectivo || 0));
         const mixtoOtroMonto = Math.max(0, ventaTotal - mixtoEfectivo);
-        const vueltoCaja = (cajaTipoPago === 'efectivo' || cajaTipoPago === 'mixto') ? Math.max(0, recibNum - (cajaTipoPago === 'mixto' ? mixtoEfectivo : ventaTotal)) : 0;
+        const efectivoEsperado = cajaTipoPago === 'mixto' ? mixtoEfectivo : ventaTotal;
+        const vueltoCaja = (cajaTipoPago === 'efectivo' || cajaTipoPago === 'mixto') ? Math.max(0, recibNum - efectivoEsperado) : 0;
         return (
           <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setCajaCobrarModal(null); }}>
             <div className="modal-card" style={{ maxWidth: 420 }}>
@@ -1798,7 +2062,7 @@ function App() {
                     <option value="tarjeta">Tarjeta</option>
                     <option value="transferencia">Transferencia</option>
                   </select>
-                  <div style={{ fontSize: 14 }}>Monto automático {cajaMixtoOtroTipo}: <strong>RD$ {mixtoOtroMonto.toFixed(2)}</strong></div>
+                  <div style={{ fontSize: 14 }}>Monto automático {cajaMixtoOtroTipo}: <strong>RD$ {money(mixtoOtroMonto)}</strong></div>
                 </div>
               )}
 
@@ -1809,7 +2073,7 @@ function App() {
                     type="number"
                     min={0}
                     step="50"
-                    placeholder={`Mín. ${ventaTotal.toFixed(2)}`}
+                    placeholder={`Mín. ${money(efectivoEsperado)}`}
                     value={cajaMontoRecibido}
                     onChange={(e) => setCajaMontoRecibido(e.target.value)}
                     autoFocus
@@ -1821,9 +2085,9 @@ function App() {
                       <strong style={{ color: '#15803d', fontSize: 24 }}>RD$ {vueltoCaja.toFixed(2)}</strong>
                     </div>
                   )}
-                  {recibNum > 0 && recibNum < ventaTotal && (
+                  {recibNum > 0 && recibNum < efectivoEsperado && (
                     <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '6px 10px', marginTop: 6, color: '#dc2626', fontSize: 12 }}>
-                      ⚠️ Monto insuficiente — faltan RD$ {(ventaTotal - recibNum).toFixed(2)}
+                      ⚠️ Monto insuficiente — faltan RD$ {money(efectivoEsperado - recibNum)}
                     </div>
                   )}
                 </div>
@@ -1836,6 +2100,10 @@ function App() {
                   }
                   if (cajaTipoPago === 'mixto' && (mixtoEfectivo <= 0 || mixtoEfectivo >= ventaTotal)) {
                     toast('error', 'En mixto el efectivo debe ser mayor a 0 y menor al total');
+                    return;
+                  }
+                  if (cajaTipoPago === 'mixto' && recibNum < mixtoEfectivo) {
+                    toast('error', `Monto recibido insuficiente para el efectivo mixto. Faltan RD$ ${money(mixtoEfectivo - recibNum)}`);
                     return;
                   }
                   try {
@@ -1975,22 +2243,30 @@ function App() {
       )}
 
       {modulo === 'revendedor' && usuario.rol === 'revendedor' && (
-        <article className="panel-card">
+        <article className="panel-card span-12">
           <div className="panel-head">
             <h3>Catálogo Revendedor (Tablet)</h3>
             <span className="chip chip-soft">Pedido en calle</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14 }}>
             <div>
               <label>Buscar cliente</label>
-              <input value={revClienteBuscar} onChange={(e) => setRevClienteBuscar(e.target.value)} placeholder="Código, nombre o teléfono" />
-              <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, marginTop: 8 }}>
-                {clientesRev.map((c) => (
-                  <button key={c.id} className="btn btn-ghost" style={{ width: '100%', textAlign: 'left', borderRadius: 0 }} onClick={() => setRevClienteId(c.id)}>
-                    {c.codigo} · {c.nombre}
-                  </button>
+              <input
+                list="rev-clientes-options"
+                value={revClienteBuscar}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setRevClienteBuscar(val);
+                  const match = clientesRev.find((c: any) => `${c.codigo} · ${c.nombre}` === val || c.nombre?.toLowerCase() === val.toLowerCase() || c.codigo?.toLowerCase() === val.toLowerCase());
+                  if (match) setRevClienteId(match.id);
+                }}
+                placeholder="Código, nombre o teléfono"
+              />
+              <datalist id="rev-clientes-options">
+                {clientesRev.map((c: any) => (
+                  <option key={c.id} value={`${c.codigo} · ${c.nombre}`}>{c.telefono_1 || c.telefono || ''}</option>
                 ))}
-              </div>
+              </datalist>
               <button className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => { setNuevoCliente({ ...NUEVOCLUB_BLANK, codigo: autoCodigoCliente(clientes), nombre: revClienteBuscar || '' }); setModalCliente(true); }}>+ Crear cliente nuevo</button>
             </div>
             <div>
@@ -2005,42 +2281,129 @@ function App() {
           <div style={{ marginTop: 14 }}>
             <label>Buscar productos</label>
             <input value={buscarProducto} onChange={(e) => setBuscarProducto(e.target.value)} placeholder="Código / nombre / marca" />
+            {revProductoInfoCard && (
+              <div className="producto-info-card" style={{ marginTop: 10 }}>
+                <button className="btn-close-info" onClick={() => setRevProductoInfoCard(null)}>✕</button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {revProductoInfoCard.imagen_url
+                    ? <img src={imgSrc(revProductoInfoCard.imagen_url)} alt={revProductoInfoCard.nombre} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #e0e0e0' }} />
+                    : <div style={{ width: 64, height: 64, background: '#f0f0f0', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#999', textAlign: 'center' }}>Sin imagen</div>}
+                  <div>
+                    <strong>{revProductoInfoCard.nombre}</strong>
+                    <div className="producto-info-detalles" style={{ marginTop: 4 }}>
+                      <span>📍 Ubicación: <strong>{revProductoInfoCard.ubicacion || 'Sin ubicación'}</strong></span>
+                      <span>📦 Existencia: <strong>{Number(revProductoInfoCard.existencia || 0).toFixed(2)}</strong></span>
+                      <span>💰 Precio activo: <strong>RD$ {money(precioRevActual(revProductoInfoCard))}</strong></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 10, marginTop: 10 }}>
               {productosRevendedor.map((p: any) => (
-                <button key={p.id} className="btn btn-ghost" style={{ textAlign: 'left', padding: 10 }} onClick={() => setRevCarrito((prev) => {
-                  const ex = prev.find((x: any) => x.producto_id === p.id);
-                  if (ex) return prev.map((x: any) => x.producto_id === p.id ? { ...x, cantidad: x.cantidad + 1 } : x);
-                  return [...prev, { producto_id: p.id, descripcion: p.nombre, cantidad: 1, precio_unitario: Number(p.precio || 0) }];
-                })}>
+                <button
+                  key={p.id}
+                  className="btn btn-ghost"
+                  style={{ textAlign: 'left', padding: 10, display: 'grid', gap: 6 }}
+                  onClick={() => setRevProductoInfoCard(p)}
+                  onDoubleClick={() => abrirModalCantidadRevendedor(p)}
+                  title="1 clic: ver precio/existencia · 2 clics: pedir cantidad"
+                >
+                  {p.imagen_url
+                    ? <img src={imgSrc(p.imagen_url)} alt={p.nombre} style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 8 }} />
+                    : <div style={{ width: '100%', height: 90, background: '#e2e8f0', borderRadius: 8, display: 'grid', placeItems: 'center', color: '#64748b', fontSize: 12 }}>Sin imagen</div>}
                   <strong>{p.nombre}</strong>
-                  <div style={{ fontSize: 12, color: '#475569' }}>{p.marca || '-'} · RD$ {Number(p.precio || 0).toFixed(2)}</div>
+                  <div style={{ fontSize: 12, color: '#475569', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <span>{p.marca || '-'} · Exis: {Number(p.existencia || 0).toFixed(0)}</span>
+                    <span
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onDoubleClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        togglePrecioRevendedor(String(p.id));
+                      }}
+                      title="Doble clic para alternar entre precio negocios #1 y #2"
+                      style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '3px 8px', background: usaPrecioNegocio2(String(p.id)) ? '#fff7ed' : '#f8fafc', fontWeight: 700 }}
+                    >
+                      RD$ {money(precioRevActual(p))}
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
-          <h4 style={{ marginTop: 14 }}>Resumen del pedido</h4>
-          <table className="table-premium">
-            <thead><tr><th>Producto</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead>
-            <tbody>
-              {revCarrito.length === 0 ? <tr><td colSpan={4} style={{ textAlign: 'center' }}>Sin productos</td></tr> : revCarrito.map((i: any, idx: number) => (
-                <tr key={idx}>
-                  <td>{i.descripcion}</td>
-                  <td><input type="number" min={1} value={i.cantidad} onChange={(e) => setRevCarrito((prev) => prev.map((x, j) => j === idx ? { ...x, cantidad: Math.max(1, Number(e.target.value || 1)) } : x))} /></td>
-                  <td>RD$ {Number(i.precio_unitario).toFixed(2)}</td>
-                  <td>RD$ {(Number(i.cantidad) * Number(i.precio_unitario)).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
-            <strong>Total: RD$ {revCarrito.reduce((a, i) => a + Number(i.cantidad) * Number(i.precio_unitario), 0).toFixed(2)}</strong>
-            <button className="btn btn-primary" onClick={() => crearOrdenRevendedor().catch((e) => toast('error', e.message))}>Enviar pedido a Órdenes</button>
-          </div>
+          <button
+            className="btn btn-primary"
+            style={{ position: 'fixed', right: 22, bottom: 22, borderRadius: 999, padding: '12px 18px', zIndex: 40, boxShadow: '0 10px 24px rgba(2,12,36,.25)' }}
+            onClick={() => setRevCarritoAbierto(true)}
+          >
+            🛒 Pedido ({revCarrito.length}) · RD$ {money(revCarrito.reduce((a, i) => a + Number(i.cantidad) * Number(i.precio_unitario), 0))}
+          </button>
         </article>
       )}
 
+      {modulo === 'revendedor' && revCarritoAbierto && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setRevCarritoAbierto(false); }}>
+          <div className="modal-card" style={{ maxWidth: 760 }}>
+            <div className="modal-header">
+              <h3>🛒 Resumen del pedido</h3>
+              <button className="btn btn-ghost" onClick={() => setRevCarritoAbierto(false)}>✕</button>
+            </div>
+            <table className="table-premium">
+              <thead><tr><th>Producto</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead>
+              <tbody>
+                {revCarrito.length === 0 ? <tr><td colSpan={4} style={{ textAlign: 'center' }}>Sin productos</td></tr> : revCarrito.map((i: any, idx: number) => (
+                  <tr key={idx}>
+                    <td>{i.descripcion}</td>
+                    <td><input type="number" min={1} value={i.cantidad} onChange={(e) => setRevCarrito((prev) => prev.map((x, j) => j === idx ? { ...x, cantidad: Math.max(1, Number(e.target.value || 1)) } : x))} /></td>
+                    <td>RD$ {money(Number(i.precio_unitario))}</td>
+                    <td>RD$ {money(Number(i.cantidad) * Number(i.precio_unitario))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+              <strong>Total: RD$ {money(revCarrito.reduce((a, i) => a + Number(i.cantidad) * Number(i.precio_unitario), 0))}</strong>
+              <button className="btn btn-primary" onClick={() => crearOrdenRevendedor().then(() => setRevCarritoAbierto(false)).catch((e) => toast('error', e.message))}>Confirmar y enviar pedido</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalCantidadRevProducto && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setModalCantidadRevProducto(null); }}>
+          <div className="modal-card" style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h3>Agregar producto al pedido</h3>
+              <button className="btn btn-ghost" onClick={() => setModalCantidadRevProducto(null)}>✕</button>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <strong>{modalCantidadRevProducto.nombre}</strong>
+              <div style={{ marginTop: 4, color: 'var(--muted)', fontSize: 13 }}>
+                📍 {modalCantidadRevProducto.ubicacion || 'Sin ubicación'} · 📦 {Number(modalCantidadRevProducto.existencia || 0).toFixed(2)} · 💰 RD$ {money(precioRevActual(modalCantidadRevProducto))}
+              </div>
+            </div>
+            <div>
+              <label>Cantidad solicitada</label>
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                value={cantidadRevProductoSeleccionada}
+                onChange={(e) => setCantidadRevProductoSeleccionada(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmarAgregarCantidadRevendedor(); }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setModalCantidadRevProducto(null)}>Cancelar</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmarAgregarCantidadRevendedor}>Agregar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modulo === 'ordenes' && (
-        <article className="panel-card">
+        <article className="panel-card span-12">
           <div className="panel-head"><h3>Órdenes / Pedidos</h3><span className="chip chip-soft">{ordenes.length} órdenes</span></div>
           <table className="table-premium">
             <thead><tr><th>Orden</th><th>Cliente</th><th>Estado</th><th>Creada por</th><th>Picker</th><th>Acciones</th></tr></thead>
@@ -2057,8 +2420,8 @@ function App() {
                           .then(() => { toast('ok', 'Buscador asignado'); cargarTodo(); })
                           .catch((er: any) => toast('error', er.message));
                       }}>
-                        <option value="">Asignar buscador...</option>
-                        {pickers.map((p: any) => <option key={p.id} value={p.id}>{p.nombre_completo}</option>)}
+                        <option value="">Asignar empleado...</option>
+                        {pickers.map((p: any) => <option key={p.id} value={p.id}>{p.nombre_completo}{p.rol ? ` (${p.rol})` : ''}</option>)}
                       </select>
                     )}
                   </td>
@@ -2131,9 +2494,13 @@ function App() {
                 <button className="btn btn-primary" onClick={async () => {
                   const r = await api<any>(`/orders/${ordenSeleccionada.id}/bundles/${bundleActual.id}/cerrar`, token, { method: 'POST' });
                   toast('ok', `Etiqueta lista para Bulto ${r?.etiqueta?.bulto ?? ''}`);
+                  if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
                   await cargarTodo();
                 }}>Caja llena / cerrar bulto</button>
               )}
+              <button className="btn btn-ghost" style={{ marginLeft: 8 }} onClick={() => imprimirFacturaOrdenFinal(ordenSeleccionada.id).catch((e) => toast('error', e.message))}>
+                🖨️ Imprimir factura final (8.5x11)
+              </button>
             </div>
           )}
         </article>
@@ -2206,15 +2573,34 @@ function App() {
             <h3>Cuentas por Cobrar — Facturas a Crédito</h3>
             <span className="chip chip-warning">{cxc.filter((x) => Number(x.balance_pendiente) > 0).length} pendientes</span>
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginBottom: 12 }}>
+            {(cxcRiesgo?.resumen ?? []).map((r: any) => (
+              <div key={r.score} style={{ border: '1px solid #dbe4ff', borderRadius: 10, padding: '8px 10px', background: '#f8fbff' }}>
+                <div style={{ fontSize: 12, color: '#475569' }}>Grado {r.score || 'A'}</div>
+                <strong style={{ fontSize: 18, color: '#1e3a8a' }}>{Number(r.clientes || 0)}</strong>
+                <div style={{ fontSize: 11, color: '#64748b' }}>Límite: RD$ {money(Number(r.limite_total || 0))}</div>
+              </div>
+            ))}
+          </div>
+          {usuario.rol === 'revendedor' && (
+            <div style={{ marginBottom: 12 }}>
+              <label>Buscar cliente (nombre, código o teléfono)</label>
+              <input
+                placeholder="Ej: yimi, CLI-0001, 809..."
+                value={cxcBuscarCliente}
+                onChange={(e) => setCxcBuscarCliente(e.target.value)}
+              />
+            </div>
+          )}
           <p style={{ color: 'var(--muted)', marginBottom: 12 }}>Todas las facturas emitidas a crédito con su balance actual</p>
           <table className="table-premium">
             <thead>
               <tr><th>Factura</th><th>Cliente</th><th>Fecha</th><th>Vence</th><th>Días restantes</th><th>Monto original</th><th>Balance pendiente</th><th>Estado</th><th>Cobro</th></tr>
             </thead>
             <tbody>
-              {cxc.length === 0 ? (
+              {cxcFiltrado.length === 0 ? (
                 <tr><td colSpan={9} className="empty" style={{ textAlign: 'center', padding: 24 }}>No hay facturas a crédito registradas</td></tr>
-              ) : cxc.map((x) => (
+              ) : cxcFiltrado.map((x) => (
                 <tr key={x.id}>
                   <td><strong>{x.numero_interno}</strong></td>
                   <td>{x.cliente_nombre || '-'}</td>
@@ -2235,6 +2621,38 @@ function App() {
               ))}
             </tbody>
           </table>
+        </article>
+      )}
+
+      {modulo === 'cuadrar' && (usuario.rol === 'vendedor' || usuario.rol === 'revendedor') && (
+        <article className="panel-card">
+          <div className="panel-head">
+            <h3>⚖️ Cuadre del día</h3>
+            <span className="chip chip-soft">Solo lectura</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginBottom: 14 }}>
+            <div className="stat-box"><span>Total cobrado</span><strong>RD$ {money(Number(cxcCuadreDia?.totales?.monto_total ?? 0))}</strong></div>
+            <div className="stat-box"><span>Efectivo</span><strong>RD$ {money(Number(cxcCuadreDia?.totales?.monto_efectivo ?? 0))}</strong></div>
+            <div className="stat-box"><span>Tarjeta</span><strong>RD$ {money(Number(cxcCuadreDia?.totales?.monto_tarjeta ?? 0))}</strong></div>
+            <div className="stat-box"><span>Transferencia</span><strong>RD$ {money(Number(cxcCuadreDia?.totales?.monto_transferencia ?? 0))}</strong></div>
+          </div>
+          <table className="table-premium">
+            <thead><tr><th>Hora</th><th>Cliente</th><th>Factura</th><th>Tipo</th><th>Monto</th></tr></thead>
+            <tbody>
+              {(cxcCuadreDia?.pagos ?? []).length === 0 ? (
+                <tr><td colSpan={5} style={{ textAlign: 'center' }}>Sin cobros registrados hoy</td></tr>
+              ) : (cxcCuadreDia.pagos || []).map((p: any) => (
+                <tr key={p.id}>
+                  <td>{String(p.fecha_creacion || '').substring(11, 19)}</td>
+                  <td>{p.cliente_nombre || '-'}</td>
+                  <td>{p.numero_interno || '-'}</td>
+                  <td>{p.tipo_pago}</td>
+                  <td>RD$ {money(Number(p.monto_total || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 10 }}>Este módulo no permite editar ni eliminar montos recibidos.</p>
         </article>
       )}
 
@@ -2474,7 +2892,7 @@ function App() {
         <article className="panel-card">
           <div className="panel-head">
             <h3>Productos</h3>
-            <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductosPage(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
+            <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductosPage(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
           </div>
           <table className="table-premium">
             <thead><tr><th></th><th>Código</th><th>Descripción</th><th>Categoría</th><th>Marca</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
@@ -2616,7 +3034,7 @@ function App() {
             <div className="panel-head">
               <h3>Inventario — {sucursales.find((s) => s.id === sucursalInvSeleccionada)?.nombre}</h3>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductoInv(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
+                <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductoInv(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
                 <button className="btn btn-ghost" onClick={() => setSucursalInvSeleccionada('')}>← Volver</button>
               </div>
             </div>
@@ -3216,13 +3634,31 @@ function App() {
         <article className="panel-card">
           <div className="panel-head">
             <h3>Historial de Ventas</h3>
-            <span className="chip chip-lan">{historialVentas.length} registros</span>
+            <span className="chip chip-lan">{historialFiltrado.length} registros</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px,1fr))', gap: 8, marginBottom: 10 }}>
+            <select value={historialFiltro.sucursal_id} onChange={(e) => setHistorialFiltro((s: any) => ({ ...s, sucursal_id: e.target.value, empleado_id: '' }))}>
+              <option value="">Todas las sucursales</option>
+              {sucursales.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+            <select value={historialFiltro.empleado_id} onChange={(e) => setHistorialFiltro((s: any) => ({ ...s, empleado_id: e.target.value }))}>
+              <option value="">Todos los empleados</option>
+              {usuarios.filter((u: any) => !historialFiltro.sucursal_id || u.sucursal_id === historialFiltro.sucursal_id).map((u: any) => <option key={u.id} value={u.id}>{u.nombre_completo}</option>)}
+            </select>
+            {historialFiltro.modo === 'dia' && <input type="date" value={historialFiltro.fecha} onChange={(e) => setHistorialFiltro((s: any) => ({ ...s, fecha: e.target.value }))} />}
+            {historialFiltro.modo === 'mes' && <input type="month" value={historialFiltro.mes} onChange={(e) => setHistorialFiltro((s: any) => ({ ...s, mes: e.target.value }))} />}
+            {historialFiltro.modo === 'rango' && (
+              <>
+                <input type="date" value={historialFiltro.desde} onChange={(e) => setHistorialFiltro((s: any) => ({ ...s, desde: e.target.value }))} />
+                <input type="date" value={historialFiltro.hasta} onChange={(e) => setHistorialFiltro((s: any) => ({ ...s, hasta: e.target.value }))} />
+              </>
+            )}
           </div>
           <table className="table-premium">
-            <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Total</th><th>Beneficio</th><th>Estado</th></tr></thead>
+            <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Total</th><th>Beneficio</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {historialVentas.length === 0 ? <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24 }}>No hay ventas registradas</td></tr> : historialVentas.map((v) => (
-                <tr key={v.id}>
+              {historialFiltrado.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24 }}>No hay ventas registradas</td></tr> : historialFiltrado.map((v: any) => (
+                <tr key={v.id} style={{ cursor: 'pointer' }} onClick={async () => setVentaDetalleModal(await api<any>(`/ventas/${v.id}`, token).catch(() => null))}>
                   <td><strong>{v.numero_interno || v.id?.substring(0, 8)}</strong></td>
                   <td>{v.fecha_creacion ? String(v.fecha_creacion).substring(0, 10) : '-'}</td>
                   <td>{v.cliente_nombre || '-'}</td>
@@ -3231,6 +3667,82 @@ function App() {
                   <td>RD$ {Number(v.total ?? 0).toFixed(2)}</td>
                   <td style={{ color: Number(v.beneficio ?? 0) < 0 ? 'var(--rojo-600)' : 'var(--success)', fontWeight: 700 }}>RD$ {Number(v.beneficio ?? 0).toFixed(2)}</td>
                   <td>{v.estado}</td>
+                  <td><button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); imprimirFacturaVenta(v.id, String(v.forma_pago ?? 'efectivo'), Number(v.total ?? 0), 0).catch((er) => toast('error', er.message)); }}>Reimprimir</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
+      )}
+
+      {modulo === 'devoluciones' && (
+        <article className="panel-card">
+          <div className="panel-head"><h3>Devoluciones</h3><span className="chip chip-soft">{devolucionesFiltradas.length} registros</span></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px,1fr))', gap: 8, marginBottom: 10 }}>
+            <select value={devolFiltro.sucursal_id} onChange={(e) => setDevolFiltro((s: any) => ({ ...s, sucursal_id: e.target.value, empleado_id: '' }))}>
+              <option value="">Todas las sucursales</option>
+              {sucursales.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+            <select value={devolFiltro.empleado_id} onChange={(e) => setDevolFiltro((s: any) => ({ ...s, empleado_id: e.target.value }))}>
+              <option value="">Todos los empleados</option>
+              {usuarios.filter((u: any) => !devolFiltro.sucursal_id || u.sucursal_id === devolFiltro.sucursal_id).map((u: any) => <option key={u.id} value={u.id}>{u.nombre_completo}</option>)}
+            </select>
+            {devolFiltro.modo === 'dia' && <input type="date" value={devolFiltro.fecha} onChange={(e) => setDevolFiltro((s: any) => ({ ...s, fecha: e.target.value }))} />}
+            {devolFiltro.modo === 'mes' && <input type="month" value={devolFiltro.mes} onChange={(e) => setDevolFiltro((s: any) => ({ ...s, mes: e.target.value }))} />}
+            {devolFiltro.modo === 'rango' && (
+              <>
+                <input type="date" value={devolFiltro.desde} onChange={(e) => setDevolFiltro((s: any) => ({ ...s, desde: e.target.value }))} />
+                <input type="date" value={devolFiltro.hasta} onChange={(e) => setDevolFiltro((s: any) => ({ ...s, hasta: e.target.value }))} />
+              </>
+            )}
+          </div>
+          <table className="table-premium">
+            <thead><tr><th>NC</th><th>Factura</th><th>Cliente</th><th>Vendida</th><th>Devuelta</th><th>Monto</th></tr></thead>
+            <tbody>
+              {devolucionesFiltradas.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin devoluciones</td></tr> : devolucionesFiltradas.map((n: any) => (
+                <tr key={n.id}>
+                  <td>{n.numero}</td>
+                  <td>{n.venta_numero || '-'}</td>
+                  <td>{n.cliente_nombre}</td>
+                  <td>{n.venta_fecha ? new Date(n.venta_fecha).toLocaleString() : '-'}</td>
+                  <td>{n.fecha_creacion ? new Date(n.fecha_creacion).toLocaleString() : '-'}</td>
+                  <td>RD$ {money(Number(n.monto_original || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
+      )}
+      {modulo === 'por-vencer' && usuario.rol === 'revendedor' && (
+        <article className="panel-card">
+          <div className="panel-head"><h3>Facturas por vencer (10 días)</h3><span className="chip chip-warning">{porVencerRev.length} facturas</span></div>
+          <table className="table-premium">
+            <thead><tr><th>Factura</th><th>Cliente</th><th>Vence</th><th>Días</th><th>Pendiente</th><th>Acción</th></tr></thead>
+            <tbody>
+              {porVencerRev.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin facturas por vencer</td></tr> : porVencerRev.map((x: any) => {
+                const dias = Math.ceil((new Date(String(x.fecha_vencimiento)).getTime() - Date.now()) / 86400000);
+                return <tr key={x.id}>
+                  <td>{x.numero_interno}</td><td>{x.cliente_nombre}</td><td>{String(x.fecha_vencimiento).slice(0, 10)}</td><td>{dias}</td><td>RD$ {money(Number(x.balance_pendiente || 0))}</td>
+                  <td><button className="btn btn-primary" onClick={() => { cambiarModuloConRuta('cxc'); setTimeout(() => setCxcCobroModal(x), 50); }}>Cobrar</button></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </article>
+      )}
+      {modulo === 'eventos' && usuario.rol === 'administrador' && (
+        <article className="panel-card">
+          <div className="panel-head"><h3>Eventos</h3><span className="chip chip-soft">{eventos.length}</span></div>
+          <table className="table-premium">
+            <thead><tr><th>Fecha/Hora</th><th>Entidad</th><th>Acción</th><th>Descripción</th><th>Usuario</th></tr></thead>
+            <tbody>
+              {eventos.length === 0 ? <tr><td colSpan={5} style={{ textAlign: 'center' }}>Sin eventos</td></tr> : eventos.map((e: any) => (
+                <tr key={e.id}>
+                  <td>{e.fecha_creacion ? new Date(e.fecha_creacion).toLocaleString() : '-'}</td>
+                  <td>{e.entidad}</td>
+                  <td>{e.accion}</td>
+                  <td>{e.descripcion}</td>
+                  <td>{e.usuario_nombre || '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -3238,6 +3750,38 @@ function App() {
         </article>
       )}
     </Layout>
+    {modalConfigReporte && (
+      <div className="modal-backdrop">
+        <div className="modal-card" style={{ maxWidth: 520 }}>
+          <div className="modal-header"><h3>¿Cómo deseas generar el reporte?</h3><button className="btn btn-ghost" onClick={() => setModalConfigReporte('')}>✕</button></div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { k: 'hoy', t: 'Hoy' },
+              { k: 'dia', t: 'Día' },
+              { k: 'mes', t: 'Mes' },
+              { k: 'rango', t: 'Rango de fechas' },
+            ].map((opt) => (
+              <button key={opt.k} className="btn btn-primary" onClick={() => {
+                if (modalConfigReporte === 'historial-ventas') setHistorialFiltro((s: any) => ({ ...s, modo: opt.k, sucursal_id: s.sucursal_id || sucursalId }));
+                if (modalConfigReporte === 'devoluciones') setDevolFiltro((s: any) => ({ ...s, modo: opt.k, sucursal_id: s.sucursal_id || sucursalId }));
+                setModalConfigReporte('');
+              }}>{opt.t}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+    {ventaDetalleModal?.venta && (
+      <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setVentaDetalleModal(null); }}>
+        <div className="modal-card" style={{ maxWidth: 860 }}>
+          <div className="modal-header"><h3>Factura {ventaDetalleModal.venta.numero_interno}</h3><button className="btn btn-ghost" onClick={() => setVentaDetalleModal(null)}>✕</button></div>
+          <p>{new Date(ventaDetalleModal.venta.fecha_creacion).toLocaleString()} · {ventaDetalleModal.venta.cliente_nombre}</p>
+          <table className="table-premium"><thead><tr><th>Producto</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead><tbody>
+            {(ventaDetalleModal.detalle || []).map((d: any) => <tr key={d.id}><td>{d.descripcion}</td><td>{d.cantidad}</td><td>RD$ {money(Number(d.precio_unitario))}</td><td>RD$ {money(Number(d.subtotal_linea))}</td></tr>)}
+          </tbody></table>
+        </div>
+      </div>
+    )}
     <div className="toast-stack">{toasts.map((t) => <div key={t.id} className={`toast ${t.tipo}`}>{t.texto}</div>)}</div>
   </>;
 }

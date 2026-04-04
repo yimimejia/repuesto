@@ -48,9 +48,12 @@ productosRouter.post('/', permitir('administrador'), (req, res) => {
 
   const id = uuid();
   const now = new Date().toISOString();
-  db.prepare(`INSERT INTO productos(id,codigo,nombre,descripcion,categoria,ubicacion,imagen_url,costo,precio,itbis_tasa,existencia,estado,tipo,marca,medida,lleva_itbis,margen,itbis_porcentaje,existencia_minima,cantidad_a_ordenar,codigo_barras,cuenta_contable,referencia,uso_notas,suplidor_principal_id,fecha_creacion,fecha_actualizacion)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, d.codigo, d.nombre, d.descripcion ?? '', d.categoria ?? null, d.ubicacion ?? '', d.imagen_url ?? '', Number(d.costo ?? 0), Number(d.precio), Number(d.itbis_tasa ?? 0), Number(d.existencia ?? 0), 'activo', d.tipo ?? '', d.marca ?? '', d.medida ?? '', d.lleva_itbis ? 1 : 0, Number(d.margen ?? 0), Number(d.itbis_porcentaje ?? 18), Number(d.existencia_minima ?? 0), Number(d.cantidad_a_ordenar ?? 0), d.codigo_barras ?? '', d.cuenta_contable ?? '', d.referencia ?? '', d.uso_notas ?? '', d.suplidor_principal_id ?? null, now, now);
+  const precioBase = Number(d.precio);
+  const precioNegocio1 = Number(d.precio_negocio_1 ?? precioBase);
+  const precioNegocio2 = Number(d.precio_negocio_2 ?? precioNegocio1);
+  db.prepare(`INSERT INTO productos(id,codigo,nombre,descripcion,categoria,ubicacion,imagen_url,costo,precio,precio_negocio_1,precio_negocio_2,itbis_tasa,existencia,estado,tipo,marca,medida,lleva_itbis,margen,itbis_porcentaje,existencia_minima,cantidad_a_ordenar,codigo_barras,cuenta_contable,referencia,uso_notas,suplidor_principal_id,fecha_creacion,fecha_actualizacion)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, d.codigo, d.nombre, d.descripcion ?? '', d.categoria ?? null, d.ubicacion ?? '', d.imagen_url ?? '', Number(d.costo ?? 0), precioBase, precioNegocio1, precioNegocio2, Number(d.itbis_tasa ?? 0), Number(d.existencia ?? 0), 'activo', d.tipo ?? '', d.marca ?? '', d.medida ?? '', d.lleva_itbis ? 1 : 0, Number(d.margen ?? 0), Number(d.itbis_porcentaje ?? 18), Number(d.existencia_minima ?? 0), Number(d.cantidad_a_ordenar ?? 0), d.codigo_barras ?? '', d.cuenta_contable ?? '', d.referencia ?? '', d.uso_notas ?? '', d.suplidor_principal_id ?? null, now, now);
   registrarAuditoria('producto', id, 'crear', `Producto ${d.codigo} creado`, usuario?.id);
   res.status(201).json({ id });
 });
@@ -67,11 +70,13 @@ productosRouter.put('/:id', permitir('administrador'), (req, res) => {
   const now = new Date().toISOString();
   const prevPrecio = Number(current.precio);
   const nuevoPrecio = Number(d.precio ?? current.precio);
+  const nuevoPrecioNegocio1 = Number(d.precio_negocio_1 ?? current.precio_negocio_1 ?? nuevoPrecio);
+  const nuevoPrecioNegocio2 = Number(d.precio_negocio_2 ?? current.precio_negocio_2 ?? nuevoPrecioNegocio1);
   db.prepare(`UPDATE productos SET
-    codigo=?, nombre=?, descripcion=?, categoria=?, ubicacion=?, imagen_url=?, costo=?, precio=?, itbis_tasa=?,
+    codigo=?, nombre=?, descripcion=?, categoria=?, ubicacion=?, imagen_url=?, costo=?, precio=?, precio_negocio_1=?, precio_negocio_2=?, itbis_tasa=?,
     tipo=?, marca=?, medida=?, lleva_itbis=?, margen=?, itbis_porcentaje=?, existencia_minima=?, cantidad_a_ordenar=?, codigo_barras=?, cuenta_contable=?, referencia=?, uso_notas=?, suplidor_principal_id=?, fecha_actualizacion=?
     WHERE id=?`)
-    .run(d.codigo ?? current.codigo, d.nombre ?? current.nombre, d.descripcion ?? current.descripcion, d.categoria ?? current.categoria, d.ubicacion ?? current.ubicacion, d.imagen_url ?? current.imagen_url, Number(d.costo ?? current.costo), nuevoPrecio, Number(d.itbis_tasa ?? current.itbis_tasa), d.tipo ?? current.tipo, d.marca ?? current.marca, d.medida ?? current.medida, d.lleva_itbis != null ? (d.lleva_itbis ? 1 : 0) : current.lleva_itbis, Number(d.margen ?? current.margen), Number(d.itbis_porcentaje ?? current.itbis_porcentaje), Number(d.existencia_minima ?? current.existencia_minima), Number(d.cantidad_a_ordenar ?? current.cantidad_a_ordenar), d.codigo_barras ?? current.codigo_barras, d.cuenta_contable ?? current.cuenta_contable, d.referencia ?? current.referencia, d.uso_notas ?? current.uso_notas, d.suplidor_principal_id ?? current.suplidor_principal_id, now, String(req.params.id));
+    .run(d.codigo ?? current.codigo, d.nombre ?? current.nombre, d.descripcion ?? current.descripcion, d.categoria ?? current.categoria, d.ubicacion ?? current.ubicacion, d.imagen_url ?? current.imagen_url, Number(d.costo ?? current.costo), nuevoPrecio, nuevoPrecioNegocio1, nuevoPrecioNegocio2, Number(d.itbis_tasa ?? current.itbis_tasa), d.tipo ?? current.tipo, d.marca ?? current.marca, d.medida ?? current.medida, d.lleva_itbis != null ? (d.lleva_itbis ? 1 : 0) : current.lleva_itbis, Number(d.margen ?? current.margen), Number(d.itbis_porcentaje ?? current.itbis_porcentaje), Number(d.existencia_minima ?? current.existencia_minima), Number(d.cantidad_a_ordenar ?? current.cantidad_a_ordenar), d.codigo_barras ?? current.codigo_barras, d.cuenta_contable ?? current.cuenta_contable, d.referencia ?? current.referencia, d.uso_notas ?? current.uso_notas, d.suplidor_principal_id ?? current.suplidor_principal_id, now, String(req.params.id));
 
   registrarAuditoria('producto', String(req.params.id), 'editar', `Producto ${d.codigo ?? current.codigo} editado`, usuario?.id);
   if (prevPrecio !== nuevoPrecio) {
