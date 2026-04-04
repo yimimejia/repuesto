@@ -38,8 +38,7 @@ const scorePorAtraso = (diasAtraso: number) => {
 const menuPorRol: Record<string, MenuItem[]> = {
   vendedor: [
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
-    { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
-    { key: 'cuadrar', label: 'Cuadrar', icono: '⚖️', acento: 'amarillo' },
+    { key: 'clientes', label: 'Clientes', icono: '👥', acento: 'naranja' },
   ],
   cajero: [
     { key: 'pos', label: 'POS / Caja', icono: '🧾', acento: 'violeta' },
@@ -48,14 +47,14 @@ const menuPorRol: Record<string, MenuItem[]> = {
     { key: 'pendiente-verificar', label: 'Pendiente verificar', icono: '✅', acento: 'verde' },
     { key: 'historial-ventas', label: 'Historial de Ventas', icono: '🗂️', acento: 'gris' },
     { key: 'fidelidad', label: 'Fidelidad', icono: '⭐', acento: 'amarillo' },
+    { key: 'clientes', label: 'Clientes', icono: '👥', acento: 'naranja' },
   ],
-  al_por_mayor: [{ key: 'mayorista', label: 'Edición Mayorista', icono: '🏷️', acento: 'naranja' }],
+  al_por_mayor: [{ key: 'mayorista', label: 'Edición Mayorista', icono: '🏷️', acento: 'naranja' }, { key: 'clientes', label: 'Clientes', icono: '👥', acento: 'naranja' }],
   revendedor: [
     { key: 'revendedor', label: 'Catálogo Revendedor', icono: '🛍️', acento: 'verde' },
     { key: 'ordenes', label: 'Órdenes', icono: '📦', acento: 'celeste' },
-    { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
     { key: 'por-vencer', label: 'Por vencer', icono: '⏳', acento: 'rojo' },
-    { key: 'cuadrar', label: 'Cuadrar', icono: '⚖️', acento: 'amarillo' },
+    { key: 'clientes', label: 'Clientes', icono: '👥', acento: 'naranja' },
   ],
   buscador: [
     { key: 'ordenes', label: 'Órdenes asignadas', icono: '📦', acento: 'celeste' },
@@ -604,14 +603,24 @@ function App() {
   const descuentoItems = carrito.reduce((a, i) => a + Number(i.descuento_monto ?? 0), 0);
   const descuentoGlobalMonto = descuentoGlobal > 0 ? (subtotal - descuentoItems) * (descuentoGlobal / 100) : 0;
   const descuentoTotal = descuentoItems + descuentoGlobalMonto;
-  const total = subtotal - descuentoTotal;
+  const totalSinRedondeo = subtotal - descuentoTotal;
+  const total = descuentoGlobal > 0 ? Math.floor(totalSinRedondeo / 5) * 5 : totalSinRedondeo;
   const itbisTotal = carrito.reduce((a, i) => { const base = Number(i.cantidad) * Number(i.precio_unitario) - Number(i.descuento_monto ?? 0); const tasa = Number(i.itbis_tasa ?? 0.18); return a + (base - base / (1 + tasa)); }, 0);
 
   function aplicarDescuentoGlobal(pct: number) {
     setDescuentoGlobal((prev) => prev === pct ? 0 : pct);
   }
 
+  function validarVendedorSeleccionado() {
+    if (!vendedorId) {
+      toast('error', 'Seleccione quién está vendiendo antes de agregar productos');
+      return false;
+    }
+    return true;
+  }
+
   function agregarProducto(p: any) {
+    if (!validarVendedorSeleccionado()) return;
     setProductoInfoCard(p);
     setCarrito((prev) => {
       const x = prev.find((i) => i.producto_id === p.id);
@@ -621,6 +630,7 @@ function App() {
   }
 
   function abrirModalCantidadProducto(p: any) {
+    if (!validarVendedorSeleccionado()) return;
     setProductoInfoCard(p);
     setModalCantidadProducto(p);
     setCantidadProductoSeleccionado('1');
@@ -1223,7 +1233,7 @@ function App() {
 
   const menuBase = menuPorRol[usuario.rol] ?? [];
   const menu = [...menuBase];
-  if ((usuario.rol === 'vendedor' || usuario.rol === 'administrador') && tieneCapacidad('can_verify') && !menu.some((m) => m.key === 'pendiente-verificar')) {
+  if (usuario.rol === 'administrador' && tieneCapacidad('can_verify') && !menu.some((m) => m.key === 'pendiente-verificar')) {
     menu.push({ key: 'pendiente-verificar', label: 'Pendiente verificar', icono: '✅', acento: 'verde' });
   }
   const kpiCards = [{ titulo: 'Pendientes', valor: String(kpis.ventas_pendientes ?? 0), subtitulo: 'Ventas en cola', tono: 'azul' as const }, { titulo: 'Caja esperada', valor: `RD$ ${Number(kpis.caja_esperada ?? 0).toFixed(2)}`, subtitulo: 'Efectivo proyectado', tono: 'verde' as const }, { titulo: 'Crédito', valor: `RD$ ${Number(kpis.ventas_credito ?? 0).toFixed(2)}`, subtitulo: 'Ventas crédito', tono: 'rojo' as const }, { titulo: 'Cobros', valor: `${Number(kpis.cobros_cantidad ?? 0)}`, subtitulo: `RD$ ${Number(kpis.cobros_total ?? 0).toFixed(2)}`, tono: 'gris' as const }, { titulo: 'Beneficio', valor: `RD$ ${Number(kpis.beneficio_neto ?? 0).toFixed(2)}`, subtitulo: 'Ganancia neta', tono: 'azul' as const }];
