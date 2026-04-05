@@ -1775,10 +1775,6 @@ function App() {
               <h3>📄 Devolución de venta</h3>
               <button className="btn btn-ghost" onClick={() => { setModalDevolucion(false); setTipoVenta('contado'); }}>✕</button>
             </div>
-            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
-              ℹ️ La devolución <strong>devuelve el producto al inventario</strong> y emite una <strong>Nota de Crédito</strong> a favor del cliente. y en este flujo <strong>registra devolución de dinero en efectivo</strong> al cliente.
-            </div>
-
             <div style={{ marginBottom: 16 }}>
               <label style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}>Buscar venta original (número o cliente)</label>
               <input
