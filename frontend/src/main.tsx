@@ -1772,11 +1772,11 @@ function App() {
         <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) { setModalDevolucion(false); setTipoVenta('contado'); } }}>
           <div className="modal-card modal-card-wide">
             <div className="modal-header">
-              <h3>📄 Devolución — Nota de Crédito</h3>
+              <h3>📄 Devolución de venta</h3>
               <button className="btn btn-ghost" onClick={() => { setModalDevolucion(false); setTipoVenta('contado'); }}>✕</button>
             </div>
             <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
-              ℹ️ La devolución <strong>devuelve el producto al inventario</strong> y emite una <strong>Nota de Crédito</strong> a favor del cliente. No se devuelve dinero en efectivo.
+              ℹ️ La devolución <strong>devuelve el producto al inventario</strong> y emite una <strong>Nota de Crédito</strong> a favor del cliente. y en este flujo <strong>registra devolución de dinero en efectivo</strong> al cliente.
             </div>
 
             <div style={{ marginBottom: 16 }}>
