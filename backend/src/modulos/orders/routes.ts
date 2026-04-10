@@ -19,7 +19,7 @@ ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscado
     JOIN usuarios u ON u.id=o.usuario_creador_id`;
 
   const rows = (usuario.rol === 'buscador' || usuario.rol === 'vendedor')
-    ? db.prepare(base + ` WHERE EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id=o.id AND oa.picker_usuario_id=?) ORDER BY o.fecha_creacion DESC`).all(usuario.id)
+    ? db.prepare(base + ` WHERE o.estado NOT IN ('buscada_completa','en_verificacion','verificada','completada') AND EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id=o.id AND oa.picker_usuario_id=?) ORDER BY o.fecha_creacion DESC`).all(usuario.id)
     : usuario.rol === 'revendedor'
       ? db.prepare(base + ' WHERE o.usuario_creador_id=? ORDER BY o.fecha_creacion DESC').all(usuario.id)
       : db.prepare(base + ' ORDER BY o.fecha_creacion DESC').all();
@@ -124,10 +124,20 @@ ordersRouter.post('/:id/items/:itemId/found', permitir('buscador', 'vendedor', '
   res.json({ ok: true });
 });
 
+ordersRouter.post('/:id/completar-busqueda', permitir('buscador', 'vendedor', 'administrador'), (req, res) => {
+  const usuario = (req as any).usuario;
+  const order = db.prepare('SELECT estado FROM orders WHERE id=?').get(req.params.id) as any;
+  if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
+  if (!['en_busqueda','buscada'].includes(String(order.estado))) return res.status(409).json({ error: 'Estado inválido para completar búsqueda' });
+  db.prepare("UPDATE orders SET estado='buscada_completa', fecha_actualizacion=? WHERE id=?").run(now(), req.params.id);
+  registrarAuditoria('orders', String(req.params.id), 'busqueda_completada', 'Búsqueda marcada como completada por picker', usuario.id);
+  res.json({ ok: true });
+});
+
 ordersRouter.post('/:id/verificar/iniciar', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
   const order = db.prepare('SELECT estado FROM orders WHERE id=?').get(req.params.id) as any;
   if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
-  if (!['buscada','pendiente_verificacion','en_verificacion'].includes(String(order.estado))) return res.status(409).json({ error: 'Estado inválido para verificación' });
+  if (!['buscada','buscada_completa','pendiente_verificacion','en_verificacion'].includes(String(order.estado))) return res.status(409).json({ error: 'Estado inválido para verificación' });
   db.prepare("UPDATE orders SET estado='en_verificacion', fecha_actualizacion=? WHERE id=?").run(now(), req.params.id);
   res.json({ ok: true });
 });
