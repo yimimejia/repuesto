@@ -165,6 +165,53 @@ ordersRouter.post('/:id/bundles', permitir('cajero', 'vendedor', 'administrador'
   res.status(201).json({ id, numero_bulto: next.n, estado: 'abierto' });
 });
 
+ordersRouter.get('/:id/items-pendientes', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
+  const items = db.prepare(`
+    SELECT oi.id, oi.descripcion, oi.cantidad as cantidad_total, oi.precio_unitario,
+      p.codigo as producto_codigo,
+      COALESCE((SELECT SUM(bi.cantidad) FROM bundle_items bi JOIN bundles b ON b.id=bi.bundle_id
+                WHERE bi.order_item_id=oi.id AND b.order_id=? AND b.estado='cerrado'), 0) as en_bultos_cerrados,
+      COALESCE((SELECT SUM(bi.cantidad) FROM bundle_items bi JOIN bundles b ON b.id=bi.bundle_id
+                WHERE bi.order_item_id=oi.id AND b.order_id=? AND b.estado='abierto'), 0) as en_bulto_abierto
+    FROM order_items oi LEFT JOIN productos p ON p.id=oi.producto_id
+    WHERE oi.order_id=? ORDER BY oi.descripcion`).all(req.params.id, req.params.id, req.params.id);
+  res.json(items);
+});
+
+ordersRouter.get('/:id/bundles/:bundleId/items', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
+  const items = db.prepare(`
+    SELECT bi.id as bundle_item_id, bi.cantidad as cantidad_en_bulto,
+      oi.id as order_item_id, oi.descripcion, oi.cantidad as cantidad_total, oi.precio_unitario,
+      p.codigo as producto_codigo
+    FROM bundle_items bi JOIN order_items oi ON oi.id=bi.order_item_id
+    LEFT JOIN productos p ON p.id=oi.producto_id
+    WHERE bi.bundle_id=? ORDER BY oi.descripcion`).all(req.params.bundleId);
+  res.json(items);
+});
+
+ordersRouter.post('/:id/bundles/:bundleId/add-item', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
+  const { order_item_id, cantidad } = req.body as any;
+  if (!order_item_id || !cantidad || Number(cantidad) <= 0) return res.status(400).json({ error: 'Datos inválidos' });
+  const bundle = db.prepare(`SELECT id FROM bundles WHERE id=? AND order_id=? AND estado='abierto'`).get(req.params.bundleId, req.params.id) as any;
+  if (!bundle) return res.status(404).json({ error: 'Bulto no encontrado o ya cerrado' });
+  const existing = db.prepare('SELECT id FROM bundle_items WHERE bundle_id=? AND order_item_id=?').get(req.params.bundleId, order_item_id) as any;
+  if (existing) {
+    db.prepare('UPDATE bundle_items SET cantidad=? WHERE id=?').run(Number(cantidad), existing.id);
+  } else {
+    db.prepare('INSERT INTO bundle_items(id,bundle_id,order_item_id,cantidad,fecha_creacion) VALUES(?,?,?,?,?)').run(uuid(), req.params.bundleId, order_item_id, Number(cantidad), now());
+  }
+  const items = db.prepare(`SELECT bi.id as bundle_item_id, bi.cantidad as cantidad_en_bulto,
+    oi.id as order_item_id, oi.descripcion, oi.cantidad as cantidad_total, oi.precio_unitario
+    FROM bundle_items bi JOIN order_items oi ON oi.id=bi.order_item_id WHERE bi.bundle_id=? ORDER BY oi.descripcion`).all(req.params.bundleId);
+  res.json({ ok: true, items });
+});
+
+ordersRouter.post('/:id/bundles/:bundleId/remove-item', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
+  const { order_item_id } = req.body as any;
+  db.prepare('DELETE FROM bundle_items WHERE bundle_id=? AND order_item_id=?').run(req.params.bundleId, order_item_id);
+  res.json({ ok: true });
+});
+
 ordersRouter.post('/:id/verificaciones', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
   const usuario = (req as any).usuario;
   const { order_item_id, bundle_id, cantidad_verificada } = req.body;

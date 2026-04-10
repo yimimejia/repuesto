@@ -220,6 +220,9 @@ function App() {
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<any>(null);
   const [pickerItems, setPickerItems] = useState<any[]>([]);
   const [bundleActual, setBundleActual] = useState<any>(null);
+  const [bultoItems, setBultoItems] = useState<any[]>([]);
+  const [ordenItemsCache, setOrdenItemsCache] = useState<Record<string, any[]>>({});
+  const [bultoQtys, setBultoQtys] = useState<Record<string, string>>({});
   const [productoInfoCard, setProductoInfoCard] = useState<any>(null);
   const [modalCantidadProducto, setModalCantidadProducto] = useState<any>(null);
   const [cantidadProductoSeleccionado, setCantidadProductoSeleccionado] = useState('1');
@@ -458,6 +461,42 @@ function App() {
   async function cargarPickerView(orderId: string) {
     const items = await api<any[]>(`/orders/${orderId}/picker-view`, token).catch(() => []);
     setPickerItems(items);
+  }
+
+  async function cargarBultoItems(orderId: string, bundleId: string) {
+    const items = await api<any[]>(`/orders/${orderId}/bundles/${bundleId}/items`, token).catch(() => []);
+    setBultoItems(items);
+  }
+
+  async function cargarOrdenItemsPendientes(orderId: string) {
+    const items = await api<any[]>(`/orders/${orderId}/items-pendientes`, token).catch(() => []);
+    setOrdenItemsCache((prev) => ({ ...prev, [orderId]: items }));
+    const qtys: Record<string, string> = {};
+    items.forEach((it: any) => {
+      const pendiente = Math.max(0, Number(it.cantidad_total) - Number(it.en_bultos_cerrados) - Number(it.en_bulto_abierto));
+      qtys[it.id] = String(pendiente);
+    });
+    setBultoQtys((prev) => ({ ...prev, ...qtys }));
+  }
+
+  async function agregarItemABulto(orderId: string, orderItemId: string, cantidad: number) {
+    if (!bundleActual) return;
+    const r = await api<any>(`/orders/${orderId}/bundles/${bundleActual.id}/add-item`, token, {
+      method: 'POST',
+      body: JSON.stringify({ order_item_id: orderItemId, cantidad }),
+    });
+    setBultoItems(r.items || []);
+    await cargarOrdenItemsPendientes(orderId);
+  }
+
+  async function quitarItemDeBulto(orderId: string, orderItemId: string) {
+    if (!bundleActual) return;
+    await api(`/orders/${orderId}/bundles/${bundleActual.id}/remove-item`, token, {
+      method: 'POST',
+      body: JSON.stringify({ order_item_id: orderItemId }),
+    });
+    setBultoItems((prev) => prev.filter((bi: any) => bi.order_item_id !== orderItemId));
+    await cargarOrdenItemsPendientes(orderId);
   }
 
   useEffect(() => {
@@ -2625,112 +2664,175 @@ function App() {
       {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || usuario.rol === 'administrador' || tieneCapacidad('can_verify')) && (() => {
         const pendientes = ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion','empacando'].includes(o.estado));
         const bultoAbierto = !!bundleActual;
+        const ordenDelBulto = bultoAbierto ? pendientes.find((o: any) => o.id === bundleActual!.orderId) ?? null : null;
+        const itemsOrdenActual: any[] = ordenDelBulto ? (ordenItemsCache[ordenDelBulto.id] ?? []) : [];
+        const totalUnidadesBulto = bultoItems.reduce((s: number, bi: any) => s + Number(bi.cantidad_en_bulto), 0);
         return (
           <article className="panel-card">
             <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{pendientes.length}</span></div>
 
+            {/* ── Sin bulto abierto: lista de órdenes con botón por orden ── */}
             {!bultoAbierto && (
-              <div style={{ textAlign: 'center', padding: '24px 0 16px', borderBottom: '1px solid #e5e7eb', marginBottom: 16 }}>
-                <button className="btn btn-primary" style={{ fontSize: 16, padding: '12px 36px', letterSpacing: 1 }} onClick={async () => {
-                  const target = ordenSeleccionada ?? pendientes[0];
-                  if (!target) return toast('error', 'No hay órdenes pendientes');
-                  try {
-                    await api(`/orders/${target.id}/verificar/iniciar`, token, { method: 'POST' }).catch(() => {});
-                    const b = await api<any>(`/orders/${target.id}/bundles`, token, { method: 'POST' });
-                    setBundleActual({ orderId: target.id, ...b });
-                    if (!ordenSeleccionada) setOrdenSeleccionada(target);
-                    toast('ok', `📦 Bulto #${b.numero_bulto} abierto`);
-                    await cargarTodo();
-                  } catch (er: any) { toast('error', er.message); }
-                }}>📦 Abrir bulto</button>
-                {pendientes.length > 1 && !ordenSeleccionada && (
-                  <p style={{ marginTop: 8, color: 'var(--muted)', fontSize: 12 }}>Se abrirá para la primera orden. Haz clic en una orden para seleccionarla primero.</p>
+              <>
+                {pendientes.length === 0 && (
+                  <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 32 }}>No hay órdenes pendientes de verificación.</p>
                 )}
-                {ordenSeleccionada && (
-                  <p style={{ marginTop: 8, color: 'var(--muted)', fontSize: 12 }}>Orden seleccionada: <strong>{ordenSeleccionada.numero_orden}</strong></p>
-                )}
-              </div>
+                {pendientes.map((o: any) => (
+                  <div key={o.id} style={{ border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 10, background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong style={{ fontSize: 15 }}>{o.numero_orden}</strong>
+                      <span style={{ marginLeft: 10, color: 'var(--muted)' }}>{o.cliente_nombre}</span>
+                      <span className="chip chip-verde" style={{ fontSize: 11, marginLeft: 10 }}>{String(o.estado).replace(/_/g,' ')}</span>
+                    </div>
+                    <button className="btn btn-primary" style={{ padding: '7px 20px', fontSize: 13 }} onClick={async () => {
+                      try {
+                        await api(`/orders/${o.id}/verificar/iniciar`, token, { method: 'POST' }).catch(() => {});
+                        const b = await api<any>(`/orders/${o.id}/bundles`, token, { method: 'POST' });
+                        setBundleActual({ orderId: o.id, ...b });
+                        setBultoItems([]);
+                        await cargarOrdenItemsPendientes(o.id);
+                        toast('ok', `📦 Bulto #${b.numero_bulto} abierto — ${o.numero_orden}`);
+                        await cargarTodo();
+                      } catch (er: any) { toast('error', er.message); }
+                    }}>📦 Abrir bulto</button>
+                  </div>
+                ))}
+              </>
             )}
 
-            {bultoAbierto && (
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 20 }}>📦</span>
-                <span><strong>Bulto #{bundleActual!.numero_bulto}</strong> abierto — {pendientes.find((o: any) => o.id === bundleActual!.orderId)?.numero_orden ?? 'orden activa'}</span>
-              </div>
-            )}
-
-            {pendientes.map((o: any) => (
-              <div key={o.id}
-                onClick={() => { if (!bultoAbierto && ordenSeleccionada?.id !== o.id) { setOrdenSeleccionada(o); setPickerItems([]); } }}
-                style={{ border: `2px solid ${ordenSeleccionada?.id === o.id ? '#3b82f6' : '#e5e7eb'}`, borderRadius: 10, padding: 14, marginBottom: 14, cursor: !bultoAbierto ? 'pointer' : 'default', background: ordenSeleccionada?.id === o.id && !bultoAbierto ? '#eff6ff' : '#fff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <strong style={{ fontSize: 15 }}>{o.numero_orden}</strong>
-                    <span style={{ marginLeft: 10, color: 'var(--muted)' }}>{o.cliente_nombre}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span className={`chip chip-${['empacando','buscada_completa','buscada'].includes(o.estado) ? 'verde' : 'warning'}`} style={{ fontSize: 11 }}>{String(o.estado).replace(/_/g,' ')}</span>
-                    {bultoAbierto && bundleActual!.orderId === o.id && ordenSeleccionada?.id !== o.id && (
-                      <button className="btn btn-primary" style={{ padding: '6px 14px' }} onClick={async (e) => {
-                        e.stopPropagation();
-                        setOrdenSeleccionada(o);
-                        await cargarPickerView(o.id);
-                      }}>Iniciar verificación</button>
-                    )}
-                    {ordenSeleccionada?.id === o.id && (
-                      <button className="btn btn-ghost" style={{ padding: '5px 12px' }} onClick={(e) => { e.stopPropagation(); setOrdenSeleccionada(null); setPickerItems([]); }}>Ocultar</button>
-                    )}
-                  </div>
+            {/* ── Bulto abierto: vista dividida ── */}
+            {bultoAbierto && ordenDelBulto && (
+              <>
+                {/* Barra de encabezado del bulto */}
+                <div style={{ background: '#1e3a8a', color: '#fff', borderRadius: 8, padding: '10px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 22 }}>📦</span>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>Bulto #{bundleActual!.numero_bulto}</span>
+                  <span style={{ opacity: 0.8, fontSize: 14 }}>— {ordenDelBulto.numero_orden} · {ordenDelBulto.cliente_nombre}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.75 }}>{bultoItems.length} art. · {totalUnidadesBulto} unid.</span>
                 </div>
 
-                {ordenSeleccionada?.id === o.id && bultoAbierto && bundleActual!.orderId === o.id && (
-                  <div style={{ marginTop: 14 }}>
-                    <table className="table-premium">
-                      <thead><tr><th>Producto</th><th>Esperado</th><th>Verificado</th><th>Acción</th></tr></thead>
-                      <tbody>
-                        {pickerItems.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>Cargando items...</td></tr>}
-                        {pickerItems.map((it: any) => (
-                          <tr key={it.id} style={{ background: Number(it.cantidad_verificada) >= Number(it.cantidad) ? '#f0fdf4' : undefined }}>
-                            <td style={{ textDecoration: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'line-through' : undefined, color: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'var(--muted)' : undefined }}>{it.descripcion}</td>
-                            <td style={{ textAlign: 'center' }}>{it.cantidad}</td>
-                            <td><input id={`verif-${it.id}`} type="number" min={0} defaultValue={Number(it.cantidad_verificada || it.cantidad || 0)} style={{ width: 70, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6 }} /></td>
-                            <td>
-                              <button className="btn btn-primary" style={{ padding: '5px 14px' }} onClick={async () => {
-                                const el = document.getElementById(`verif-${it.id}`) as HTMLInputElement | null;
-                                const qty = Math.max(0, Number(el?.value || 0));
-                                try {
-                                  await api(`/orders/${o.id}/verificaciones`, token, { method: 'POST', body: JSON.stringify({ order_item_id: it.id, bundle_id: bundleActual!.id, cantidad_verificada: qty }) });
-                                  await cargarPickerView(o.id);
-                                } catch (er: any) { toast('error', er.message); }
-                              }}>Confirmar</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {/* Grid 2 columnas */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
 
-                    <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <button className="btn btn-primary" style={{ fontSize: 14, padding: '9px 22px' }} onClick={async () => {
+                  {/* IZQUIERDA: artículos de la orden */}
+                  <div>
+                    <h4 style={{ margin: '0 0 10px', color: '#1e3a8a', fontSize: 14 }}>Artículos de {ordenDelBulto.numero_orden}</h4>
+                    {itemsOrdenActual.length === 0 && (
+                      <p style={{ color: 'var(--muted)', padding: 16, textAlign: 'center', fontSize: 13 }}>Cargando artículos...</p>
+                    )}
+                    {itemsOrdenActual.map((it: any) => {
+                      const enCerrados = Number(it.en_bultos_cerrados);
+                      const enAbierto  = Number(it.en_bulto_abierto);
+                      const total      = Number(it.cantidad_total);
+                      const pendiente  = Math.max(0, total - enCerrados - enAbierto);
+                      const completado = enCerrados >= total;
+                      const enEsteBulto = bultoItems.find((bi: any) => bi.order_item_id === it.id);
+                      const qty = bultoQtys[it.id] ?? String(pendiente);
+                      return (
+                        <div key={it.id} style={{
+                          border: `1.5px solid ${completado ? '#bbf7d0' : enEsteBulto ? '#bfdbfe' : '#e5e7eb'}`,
+                          borderRadius: 8, padding: '10px 14px', marginBottom: 8,
+                          background: completado ? '#f0fdf4' : enEsteBulto ? '#eff6ff' : '#fff',
+                          opacity: completado ? 0.6 : 1,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13, textDecoration: completado ? 'line-through' : undefined }}>{it.descripcion}</div>
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                Total: {total} · Empacado: {enCerrados} · En bulto actual: {enAbierto}
+                                {completado && <span style={{ color: '#16a34a', fontWeight: 700, marginLeft: 6 }}>✓ Completo</span>}
+                              </div>
+                            </div>
+                            {!completado && (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  type="number" min={1}
+                                  max={pendiente + (enEsteBulto ? Number(enEsteBulto.cantidad_en_bulto) : 0)}
+                                  value={qty}
+                                  onChange={(e) => setBultoQtys((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                                  style={{ width: 60, padding: '5px 8px', border: '1.5px solid #3b82f6', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                                />
+                                <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 12 }} onClick={async () => {
+                                  const q = Math.max(1, Number(qty));
+                                  try { await agregarItemABulto(ordenDelBulto.id, it.id, q); }
+                                  catch (er: any) { toast('error', er.message); }
+                                }}>{enEsteBulto ? '↺ Actualizar' : '+ Agregar'}</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Otras órdenes (referencia) */}
+                    {pendientes.filter((o: any) => o.id !== ordenDelBulto.id).length > 0 && (
+                      <div style={{ marginTop: 20 }}>
+                        <h4 style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 13 }}>Otras órdenes pendientes</h4>
+                        {pendientes.filter((o: any) => o.id !== ordenDelBulto.id).map((o: any) => (
+                          <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 14px', marginBottom: 6, background: '#fafafa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span><strong style={{ fontSize: 13 }}>{o.numero_orden}</strong><span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 8 }}>{o.cliente_nombre}</span></span>
+                            <span className="chip chip-warning" style={{ fontSize: 10 }}>{String(o.estado).replace(/_/g,' ')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DERECHA: panel del bulto */}
+                  <div style={{ border: '2px solid #bfdbfe', borderRadius: 10, padding: 16, background: '#f8faff', position: 'sticky', top: 80 }}>
+                    <h4 style={{ margin: '0 0 12px', color: '#1e3a8a', fontSize: 14 }}>Contenido del bulto</h4>
+                    {bultoItems.length === 0 && (
+                      <p style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'center', padding: '14px 0' }}>
+                        Bulto vacío.<br/>Agrega artículos desde la izquierda.
+                      </p>
+                    )}
+                    {bultoItems.map((bi: any) => (
+                      <div key={bi.bundle_item_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #dbeafe' }}>
+                        <span style={{ flex: 1, fontSize: 12, color: '#1e293b' }}>{bi.descripcion}</span>
+                        <span style={{ fontWeight: 700, minWidth: 28, textAlign: 'center', color: '#1e3a8a', fontSize: 13 }}>×{bi.cantidad_en_bulto}</span>
+                        <button onClick={async () => {
+                          try { await quitarItemDeBulto(ordenDelBulto.id, bi.order_item_id); }
+                          catch (er: any) { toast('error', er.message); }
+                        }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 16, padding: '0 2px', lineHeight: 1 }} title="Quitar">✕</button>
+                      </div>
+                    ))}
+                    {bultoItems.length > 0 && (
+                      <div style={{ marginTop: 10, padding: '8px 0', borderTop: '2px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#1e3a8a', fontWeight: 700 }}>
+                        <span>Total unidades</span><span>{totalUnidadesBulto}</span>
+                      </div>
+                    )}
+                    <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <button className="btn btn-primary" style={{ width: '100%', fontSize: 14, padding: '10px 0' }} onClick={async () => {
+                        if (bultoItems.length === 0) return toast('error', 'El bulto está vacío. Agrega al menos un artículo.');
                         try {
-                          const r = await api<any>(`/orders/${o.id}/bundles/${bundleActual!.id}/cerrar`, token, { method: 'POST' });
+                          const r = await api<any>(`/orders/${ordenDelBulto.id}/bundles/${bundleActual!.id}/cerrar`, token, { method: 'POST' });
                           toast('ok', `Bulto #${bundleActual!.numero_bulto} cerrado`);
                           if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
-                          setTimeout(() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message)), 800);
+                          setTimeout(() => imprimirFacturaOrdenFinal(ordenDelBulto.id).catch((e: any) => toast('error', e.message)), 800);
                           if (r?.siguiente_bulto) {
-                            setBundleActual({ orderId: o.id, ...r.siguiente_bulto });
-                            toast('ok', `📦 Bulto #${r.siguiente_bulto.numero_bulto} abierto automáticamente`);
-                          } else { setBundleActual(null); }
+                            setBundleActual({ orderId: ordenDelBulto.id, ...r.siguiente_bulto });
+                            setBultoItems([]);
+                            await cargarOrdenItemsPendientes(ordenDelBulto.id);
+                            toast('ok', `📦 Bulto #${r.siguiente_bulto.numero_bulto} abierto`);
+                          } else {
+                            setBundleActual(null); setBultoItems([]); setOrdenItemsCache({});
+                          }
                           await cargarTodo();
                         } catch (er: any) { toast('error', er.message); }
                       }}>📦 Cerrar bulto</button>
-                      <button className="btn btn-ghost" onClick={() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message))}>
+                      <button className="btn btn-ghost" style={{ width: '100%', fontSize: 13 }}
+                        onClick={() => imprimirFacturaOrdenFinal(ordenDelBulto.id).catch((e: any) => toast('error', e.message))}>
                         🖨️ Imprimir factura
+                      </button>
+                      <button style={{ width: '100%', fontSize: 12, padding: '7px 0', border: '1px solid #fecaca', borderRadius: 6, background: 'none', color: '#ef4444', cursor: 'pointer' }}
+                        onClick={() => { if (confirm('¿Cancelar este bulto y volver a la lista?')) { setBundleActual(null); setBultoItems([]); setOrdenItemsCache({}); } }}>
+                        Cancelar y volver
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              </>
+            )}
           </article>
         );
       })()}
