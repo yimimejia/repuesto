@@ -2538,52 +2538,80 @@ function App() {
         <article className="panel-card">
           <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion'].includes(o.estado)).length}</span></div>
           {ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion'].includes(o.estado)).map((o: any) => (
-            <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 10, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <strong>{o.numero_orden} · {o.cliente_nombre}</strong>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-ghost" onClick={async () => { await api(`/orders/${o.id}/verificar/iniciar`, token, { method: 'POST' }); toast('ok', 'Verificación iniciada'); cargarTodo(); }}>Iniciar verificación</button>
-                  <button className="btn btn-primary" onClick={async () => { const b = await api<any>(`/orders/${o.id}/bundles`, token, { method: 'POST' }); setBundleActual({ orderId: o.id, ...b }); toast('ok', `Bulto #${b.numero_bulto} abierto`); }}>Nuevo bulto</button>
+            <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong style={{ fontSize: 15 }}>{o.numero_orden}</strong>
+                  <span style={{ marginLeft: 10, color: 'var(--muted)' }}>{o.cliente_nombre}</span>
+                  {bundleActual?.orderId === o.id && (
+                    <span className="chip chip-soft" style={{ marginLeft: 10 }}>Bulto #{bundleActual.numero_bulto} abierto</span>
+                  )}
                 </div>
+                {ordenSeleccionada?.id !== o.id && (
+                  <button className="btn btn-primary" onClick={async () => {
+                    try {
+                      await api(`/orders/${o.id}/verificar/iniciar`, token, { method: 'POST' }).catch(() => {});
+                      const b = await api<any>(`/orders/${o.id}/bundles`, token, { method: 'POST' });
+                      setBundleActual({ orderId: o.id, ...b });
+                      setOrdenSeleccionada(o);
+                      await cargarPickerView(o.id);
+                      await cargarTodo();
+                      toast('ok', `Bulto #${b.numero_bulto} abierto`);
+                    } catch (er: any) { toast('error', er.message); }
+                  }}>📦 Abrir bulto</button>
+                )}
+                {ordenSeleccionada?.id === o.id && (
+                  <button className="btn btn-ghost" onClick={() => { setOrdenSeleccionada(null); setPickerItems([]); }}>Ocultar</button>
+                )}
               </div>
-              <button className="btn btn-ghost" style={{ marginTop: 8 }} onClick={async () => { setOrdenSeleccionada(o); await cargarPickerView(o.id); }}>Ver items</button>
+
+              {ordenSeleccionada?.id === o.id && (
+                <div style={{ marginTop: 14 }}>
+                  <table className="table-premium">
+                    <thead><tr><th>Producto</th><th>Esperado</th><th>Verificado</th><th>Acción</th></tr></thead>
+                    <tbody>
+                      {pickerItems.map((it: any) => (
+                        <tr key={it.id} style={{ background: Number(it.cantidad_verificada) >= Number(it.cantidad) ? '#f0fdf4' : undefined }}>
+                          <td style={{ textDecoration: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'line-through' : undefined, color: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'var(--muted)' : undefined }}>{it.descripcion}</td>
+                          <td>{it.cantidad}</td>
+                          <td><input id={`verif-${it.id}`} type="number" min={0} defaultValue={Number(it.cantidad_verificada || it.cantidad || 0)} style={{ width: 70, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6 }} /></td>
+                          <td>
+                            <button className="btn btn-primary" style={{ padding: '5px 14px' }} disabled={!bundleActual || bundleActual.orderId !== o.id} onClick={async () => {
+                              const el = document.getElementById(`verif-${it.id}`) as HTMLInputElement | null;
+                              const qty = Math.max(0, Number(el?.value || 0));
+                              try {
+                                await api(`/orders/${o.id}/verificaciones`, token, { method: 'POST', body: JSON.stringify({ order_item_id: it.id, bundle_id: bundleActual?.id, cantidad_verificada: qty }) });
+                                await cargarPickerView(o.id);
+                              } catch (er: any) { toast('error', er.message); }
+                            }}>Confirmar</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {bundleActual?.orderId === o.id && (
+                      <button className="btn btn-primary" onClick={async () => {
+                        try {
+                          const r = await api<any>(`/orders/${o.id}/bundles/${bundleActual.id}/cerrar`, token, { method: 'POST' });
+                          toast('ok', `Bulto #${bundleActual.numero_bulto} cerrado`);
+                          if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
+                          const b2 = await api<any>(`/orders/${o.id}/bundles`, token, { method: 'POST' });
+                          setBundleActual({ orderId: o.id, ...b2 });
+                          toast('ok', `Bulto #${b2.numero_bulto} abierto automáticamente`);
+                          await cargarTodo();
+                        } catch (er: any) { toast('error', er.message); }
+                      }}>📦 Cerrar bulto y abrir siguiente</button>
+                    )}
+                    <button className="btn btn-ghost" onClick={() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message))}>
+                      🖨️ Imprimir factura final
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
-          {ordenSeleccionada && (
-            <div>
-              <h4>Verificando {ordenSeleccionada.numero_orden} · {bundleActual ? `Bulto #${bundleActual.numero_bulto}` : 'Seleccione/cree bulto'}</h4>
-              <table className="table-premium">
-                <thead><tr><th>Producto</th><th>Esperado</th><th>Verificado</th><th>Acción</th></tr></thead>
-                <tbody>
-                  {pickerItems.map((it: any) => (
-                    <tr key={it.id}>
-                      <td>{it.descripcion}</td>
-                      <td>{it.cantidad}</td>
-                      <td><input id={`verif-${it.id}`} type="number" min={0} defaultValue={Number(it.cantidad_verificada || it.cantidad || 0)} /></td>
-                      <td><button className="btn btn-primary" disabled={!bundleActual} onClick={async () => {
-                        const el = document.getElementById(`verif-${it.id}`) as HTMLInputElement | null;
-                        const qty = Math.max(0, Number(el?.value || 0));
-                        await api(`/orders/${ordenSeleccionada.id}/verificaciones`, token, { method: 'POST', body: JSON.stringify({ order_item_id: it.id, bundle_id: bundleActual?.id, cantidad_verificada: qty }) });
-                        await cargarPickerView(ordenSeleccionada.id);
-                        await cargarTodo();
-                      }}>Confirmar</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {bundleActual && (
-                <button className="btn btn-primary" onClick={async () => {
-                  const r = await api<any>(`/orders/${ordenSeleccionada.id}/bundles/${bundleActual.id}/cerrar`, token, { method: 'POST' });
-                  toast('ok', `Etiqueta lista para Bulto ${r?.etiqueta?.bulto ?? ''}`);
-                  if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
-                  await cargarTodo();
-                }}>Caja llena / cerrar bulto</button>
-              )}
-              <button className="btn btn-ghost" style={{ marginLeft: 8 }} onClick={() => imprimirFacturaOrdenFinal(ordenSeleccionada.id).catch((e) => toast('error', e.message))}>
-                🖨️ Imprimir factura final (8.5x11)
-              </button>
-            </div>
-          )}
         </article>
       )}
 
