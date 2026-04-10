@@ -18,11 +18,13 @@ ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscado
     JOIN clientes c ON c.id=o.cliente_id
     JOIN usuarios u ON u.id=o.usuario_creador_id`;
 
-  const rows = (usuario.rol === 'buscador' || usuario.rol === 'vendedor')
+  const rows = usuario.rol === 'buscador'
     ? db.prepare(base + ` WHERE o.estado NOT IN ('buscada_completa','en_verificacion','verificada','completada') AND EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id=o.id AND oa.picker_usuario_id=?) ORDER BY o.fecha_creacion DESC`).all(usuario.id)
-    : usuario.rol === 'revendedor'
-      ? db.prepare(base + ' WHERE o.usuario_creador_id=? ORDER BY o.fecha_creacion DESC').all(usuario.id)
-      : db.prepare(base + ' ORDER BY o.fecha_creacion DESC').all();
+    : usuario.rol === 'vendedor'
+      ? db.prepare(base + ` WHERE o.usuario_creador_id=? AND o.estado NOT IN ('completada') ORDER BY o.fecha_creacion DESC`).all(usuario.id)
+      : usuario.rol === 'revendedor'
+        ? db.prepare(base + ' WHERE o.usuario_creador_id=? ORDER BY o.fecha_creacion DESC').all(usuario.id)
+        : db.prepare(base + ' ORDER BY o.fecha_creacion DESC').all();
 
   res.json(rows);
 });

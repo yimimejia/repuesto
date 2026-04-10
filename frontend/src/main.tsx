@@ -2423,12 +2423,12 @@ function App() {
         <article className="panel-card span-12">
           <div className="panel-head">
             <h3>Órdenes asignadas</h3>
-            <span className="chip chip-soft">{ordenes.length} {ordenes.length === 1 ? 'orden' : 'órdenes'}</span>
+            <span className="chip chip-soft">{ordenes.filter((o: any) => !['buscada_completa','en_verificacion','empacando','verificada','completada'].includes(o.estado)).length} órdenes</span>
           </div>
-          {ordenes.length === 0 && (
-            <p style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No tienes órdenes asignadas en este momento.</p>
+          {ordenes.filter((o: any) => !['buscada_completa','en_verificacion','empacando','verificada','completada'].includes(o.estado)).length === 0 && (
+            <p style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No tienes órdenes pendientes en este momento.</p>
           )}
-          {ordenes.map((o: any) => (
+          {ordenes.filter((o: any) => !['buscada_completa','en_verificacion','empacando','verificada','completada'].includes(o.estado)).map((o: any) => (
             <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div>
