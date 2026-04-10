@@ -38,7 +38,6 @@ const menuPorRol: Record<string, MenuItem[]> = {
   vendedor: [
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
     { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
-    { key: 'ordenes', label: 'Órdenes / Pedidos', icono: '📦', acento: 'celeste' },
     { key: 'pendiente-verificar', label: 'Pendiente verificar', icono: '✅', acento: 'verde' },
   ],
   cajero: [
@@ -2449,10 +2448,10 @@ function App() {
         </article>
       )}
 
-      {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || tieneCapacidad('can_verify')) && (
+      {modulo === 'pendiente-verificar' && (usuario.rol === 'vendedor' || usuario.rol === 'cajero' || tieneCapacidad('can_verify')) && (
         <article className="panel-card">
-          <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => ['buscada','pendiente_verificacion','en_verificacion','empacando'].includes(String(o.estado))).length}</span></div>
-          {ordenes.filter((o: any) => ['buscada','pendiente_verificacion','en_verificacion','empacando'].includes(String(o.estado))).map((o: any) => (
+          <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => ['buscada','pendiente_verificacion','en_verificacion','empacando'].includes(String(o.estado)) || (usuario.rol === 'buscador' && Array.isArray(o.asignados_a) && o.asignados_a.includes(usuario.id))).length}</span></div>
+          {ordenes.filter((o: any) => ['buscada','pendiente_verificacion','en_verificacion','empacando'].includes(String(o.estado)) || (usuario.rol === 'buscador' && Array.isArray(o.asignados_a) && o.asignados_a.includes(usuario.id))).map((o: any) => (
             <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 10, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <strong>{o.numero_orden} · {o.cliente_nombre}</strong>
