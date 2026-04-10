@@ -37,7 +37,7 @@ const scorePorAtraso = (diasAtraso: number) => {
 const menuPorRol: Record<string, MenuItem[]> = {
   vendedor: [
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
-    { key: 'pendiente-verificar', label: 'Pendiente verificar', icono: '✅', acento: 'verde' },
+    { key: 'ordenes', label: 'Órdenes / Pedidos', icono: '📦', acento: 'celeste' },
   ],
   cajero: [
     { key: 'pos', label: 'POS / Caja', icono: '🧾', acento: 'violeta' },
@@ -2398,11 +2398,14 @@ function App() {
 
       {modulo === 'ordenes' && (
         <article className="panel-card span-12">
-          <div className="panel-head"><h3>Órdenes / Pedidos</h3><span className="chip chip-soft">{ordenes.length} órdenes</span></div>
+          <div className="panel-head">
+            <h3>{usuario.rol === 'vendedor' ? 'Órdenes asignadas' : 'Órdenes / Pedidos'}</h3>
+            <span className="chip chip-soft">{ordenes.length} órdenes</span>
+          </div>
           <table className="table-premium">
             <thead><tr><th>Orden</th><th>Cliente</th><th>Estado</th><th>Creada por</th><th>Picker</th><th>Acciones</th></tr></thead>
             <tbody>
-              {ordenes.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin órdenes</td></tr> : ordenes.map((o: any) => (
+              {ordenes.filter((o: any) => usuario.rol !== 'vendedor' || (Array.isArray(o.asignados_a) && o.asignados_a.includes(usuario.id))).length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin órdenes asignadas</td></tr> : ordenes.filter((o: any) => usuario.rol !== 'vendedor' || (Array.isArray(o.asignados_a) && o.asignados_a.includes(usuario.id))).map((o: any) => (
                 <tr key={o.id}>
                   <td>{o.numero_orden}</td><td>{o.cliente_nombre}</td><td>{o.estado}</td><td>{o.usuario_creador}</td><td>{o.picker_asignado || '-'}</td>
                   <td style={{ display: 'flex', gap: 6 }}>
@@ -2447,7 +2450,7 @@ function App() {
         </article>
       )}
 
-      {modulo === 'pendiente-verificar' && (usuario.rol === 'vendedor' || usuario.rol === 'cajero' || usuario.rol === 'buscador' || tieneCapacidad('can_verify')) && (
+      {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || usuario.rol === 'administrador' || tieneCapacidad('can_verify')) && (
         <article className="panel-card">
           <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => Array.isArray(o.asignados_a) ? o.asignados_a.includes(usuario.id) : false).length}</span></div>
           {ordenes.filter((o: any) => Array.isArray(o.asignados_a) ? o.asignados_a.includes(usuario.id) : false).map((o: any) => (
