@@ -473,6 +473,7 @@ function asegurarMigraciones() {
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
   )`);
 
+  try { db.exec("ALTER TABLE clientes ADD COLUMN ciudad TEXT"); } catch {}
   db.exec('CREATE INDEX IF NOT EXISTS idx_clientes_codigo ON clientes(codigo)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_clientes_doc ON clientes(cedula_rnc)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_productos_barra ON productos(codigo_barras)');

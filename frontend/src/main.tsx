@@ -994,26 +994,49 @@ function App() {
   }
 
   function imprimirEtiquetaBulto(etiqueta: any) {
-    const w = window.open('', '_blank', 'width=420,height=620');
+    const w = window.open('', '_blank', 'width=500,height=680');
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Etiqueta bulto ${etiqueta?.bulto ?? ''}</title>
+    const irc_svg = `<svg xmlns="http://www.w3.org/2000/svg" width="110" height="80" viewBox="0 0 110 80">
+      <g transform="translate(5,5)">
+        <circle cx="32" cy="35" r="28" fill="none" stroke="#0a2d6e" stroke-width="6"/>
+        <circle cx="32" cy="35" r="17" fill="none" stroke="#0a2d6e" stroke-width="3.5"/>
+        <text x="32" y="42" text-anchor="middle" font-size="16" font-family="Arial" font-weight="900" fill="#b91c1c">@</text>
+        ${[0,45,90,135,180,225,270,315].map((a:number)=>`<rect x="28" y="3" width="8" height="11" rx="2" fill="#0a2d6e" transform="rotate(${a} 32 35)"/>`).join('')}
+      </g>
+      <text x="78" y="46" text-anchor="middle" font-size="34" font-family="Arial" font-weight="900"><tspan fill="#0a2d6e">I</tspan><tspan fill="#b91c1c">R</tspan><tspan fill="#0a2d6e">C</tspan></text>
+    </svg>`;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+      <title>Etiqueta Bulto ${etiqueta?.bulto ?? ''}</title>
       <style>
-        @page { size: 4in 6in; margin: 10mm; }
-        body { font-family: Arial, sans-serif; padding: 12px; color: #111; }
-        h2 { margin: 0 0 6px; font-size: 20px; }
-        p { margin: 4px 0; font-size: 14px; }
-        .bulto { margin-top: 24px; border-top: 2px solid #111; padding-top: 16px; text-align: center; }
-        .bulto strong { font-size: 34px; letter-spacing: 2px; }
+        @page { size: 4in 6in; margin: 8mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; color: #111; background: #fff; padding: 10px; border: 2px solid #ccc; border-radius: 12px; }
+        .top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .company { font-size: 14px; font-weight: 900; text-align: center; margin-bottom: 6px; }
+        .info-line { font-size: 13px; margin: 5px 0; }
+        .info-line.bold { font-weight: 900; font-size: 14px; }
+        .divider { border-top: 2px solid #333; margin: 10px 0; }
+        .detail-line { font-size: 11px; margin: 4px 0; }
+        .bulto-box { text-align: center; margin-top: 16px; border-top: 2px solid #111; padding-top: 10px; }
+        .bulto-num { font-size: 48px; font-weight: 900; letter-spacing: 2px; }
       </style>
     </head><body>
-      <h2>Importadora Repuestos Calcaño</h2>
-      <p><strong>Fecha:</strong> ${etiqueta?.fecha ?? '-'}</p>
-      <p><strong>Código cliente:</strong> ${etiqueta?.cliente_codigo ?? '-'}</p>
-      <p><strong>Cliente:</strong> ${etiqueta?.cliente_nombre ?? '-'}</p>
-      <p><strong>Dirección:</strong> ${etiqueta?.direccion ?? '-'}</p>
-      <div class="bulto">
-        <p>Bulto</p>
-        <strong>${etiqueta?.bulto ?? '-'}</strong>
+      <div class="company">IMPORTADORA REPUESTOS CALCAÑO SRL</div>
+      <div class="top">
+        <div>
+          <div class="info-line">${etiqueta?.fecha ?? '-'}</div>
+          <div class="info-line bold">CODIGO: ${etiqueta?.cliente_codigo ?? '-'}</div>
+          <div class="info-line bold">CLIENTE: ${(etiqueta?.cliente_nombre ?? '-').toUpperCase()}</div>
+        </div>
+        <div>${irc_svg}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="detail-line"><strong>DIRECCION:</strong> ${(etiqueta?.direccion ?? '-').toUpperCase()}</div>
+      <div class="detail-line"><strong>CIUDAD:</strong> ${(etiqueta?.ciudad ?? '').toUpperCase() || '-'}</div>
+      <div class="detail-line"><strong>PEDIDO:</strong> ${etiqueta?.numero_orden ?? '-'}</div>
+      <div class="bulto-box">
+        <div style="font-size:16px;font-weight:700">BULTO:</div>
+        <div class="bulto-num">${etiqueta?.bulto ?? '-'}</div>
       </div>
     </body></html>`);
     w.document.close();
@@ -2534,86 +2557,118 @@ function App() {
         </article>
       )}
 
-      {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || usuario.rol === 'administrador' || tieneCapacidad('can_verify')) && (
-        <article className="panel-card">
-          <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion'].includes(o.estado)).length}</span></div>
-          {ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion'].includes(o.estado)).map((o: any) => (
-            <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <strong style={{ fontSize: 15 }}>{o.numero_orden}</strong>
-                  <span style={{ marginLeft: 10, color: 'var(--muted)' }}>{o.cliente_nombre}</span>
-                  {bundleActual?.orderId === o.id && (
-                    <span className="chip chip-soft" style={{ marginLeft: 10 }}>Bulto #{bundleActual.numero_bulto} abierto</span>
-                  )}
-                </div>
-                {ordenSeleccionada?.id !== o.id && (
-                  <button className="btn btn-primary" onClick={async () => {
-                    try {
-                      await api(`/orders/${o.id}/verificar/iniciar`, token, { method: 'POST' }).catch(() => {});
-                      const b = await api<any>(`/orders/${o.id}/bundles`, token, { method: 'POST' });
-                      setBundleActual({ orderId: o.id, ...b });
-                      setOrdenSeleccionada(o);
-                      await cargarPickerView(o.id);
-                      await cargarTodo();
-                      toast('ok', `Bulto #${b.numero_bulto} abierto`);
-                    } catch (er: any) { toast('error', er.message); }
-                  }}>📦 Abrir bulto</button>
+      {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || usuario.rol === 'administrador' || tieneCapacidad('can_verify')) && (() => {
+        const pendientes = ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion','empacando'].includes(o.estado));
+        const bultoAbierto = !!bundleActual;
+        return (
+          <article className="panel-card">
+            <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{pendientes.length}</span></div>
+
+            {!bultoAbierto && (
+              <div style={{ textAlign: 'center', padding: '24px 0 16px', borderBottom: '1px solid #e5e7eb', marginBottom: 16 }}>
+                <button className="btn btn-primary" style={{ fontSize: 16, padding: '12px 36px', letterSpacing: 1 }} onClick={async () => {
+                  const target = ordenSeleccionada ?? pendientes[0];
+                  if (!target) return toast('error', 'No hay órdenes pendientes');
+                  try {
+                    await api(`/orders/${target.id}/verificar/iniciar`, token, { method: 'POST' }).catch(() => {});
+                    const b = await api<any>(`/orders/${target.id}/bundles`, token, { method: 'POST' });
+                    setBundleActual({ orderId: target.id, ...b });
+                    if (!ordenSeleccionada) setOrdenSeleccionada(target);
+                    toast('ok', `📦 Bulto #${b.numero_bulto} abierto`);
+                    await cargarTodo();
+                  } catch (er: any) { toast('error', er.message); }
+                }}>📦 Abrir bulto</button>
+                {pendientes.length > 1 && !ordenSeleccionada && (
+                  <p style={{ marginTop: 8, color: 'var(--muted)', fontSize: 12 }}>Se abrirá para la primera orden. Haz clic en una orden para seleccionarla primero.</p>
                 )}
-                {ordenSeleccionada?.id === o.id && (
-                  <button className="btn btn-ghost" onClick={() => { setOrdenSeleccionada(null); setPickerItems([]); }}>Ocultar</button>
+                {ordenSeleccionada && (
+                  <p style={{ marginTop: 8, color: 'var(--muted)', fontSize: 12 }}>Orden seleccionada: <strong>{ordenSeleccionada.numero_orden}</strong></p>
                 )}
               </div>
+            )}
 
-              {ordenSeleccionada?.id === o.id && (
-                <div style={{ marginTop: 14 }}>
-                  <table className="table-premium">
-                    <thead><tr><th>Producto</th><th>Esperado</th><th>Verificado</th><th>Acción</th></tr></thead>
-                    <tbody>
-                      {pickerItems.map((it: any) => (
-                        <tr key={it.id} style={{ background: Number(it.cantidad_verificada) >= Number(it.cantidad) ? '#f0fdf4' : undefined }}>
-                          <td style={{ textDecoration: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'line-through' : undefined, color: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'var(--muted)' : undefined }}>{it.descripcion}</td>
-                          <td>{it.cantidad}</td>
-                          <td><input id={`verif-${it.id}`} type="number" min={0} defaultValue={Number(it.cantidad_verificada || it.cantidad || 0)} style={{ width: 70, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6 }} /></td>
-                          <td>
-                            <button className="btn btn-primary" style={{ padding: '5px 14px' }} disabled={!bundleActual || bundleActual.orderId !== o.id} onClick={async () => {
-                              const el = document.getElementById(`verif-${it.id}`) as HTMLInputElement | null;
-                              const qty = Math.max(0, Number(el?.value || 0));
-                              try {
-                                await api(`/orders/${o.id}/verificaciones`, token, { method: 'POST', body: JSON.stringify({ order_item_id: it.id, bundle_id: bundleActual?.id, cantidad_verificada: qty }) });
-                                await cargarPickerView(o.id);
-                              } catch (er: any) { toast('error', er.message); }
-                            }}>Confirmar</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {bultoAbierto && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 20 }}>📦</span>
+                <span><strong>Bulto #{bundleActual!.numero_bulto}</strong> abierto — {pendientes.find((o: any) => o.id === bundleActual!.orderId)?.numero_orden ?? 'orden activa'}</span>
+              </div>
+            )}
 
-                  <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {bundleActual?.orderId === o.id && (
-                      <button className="btn btn-primary" onClick={async () => {
-                        try {
-                          const r = await api<any>(`/orders/${o.id}/bundles/${bundleActual.id}/cerrar`, token, { method: 'POST' });
-                          toast('ok', `Bulto #${bundleActual.numero_bulto} cerrado`);
-                          if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
-                          const b2 = await api<any>(`/orders/${o.id}/bundles`, token, { method: 'POST' });
-                          setBundleActual({ orderId: o.id, ...b2 });
-                          toast('ok', `Bulto #${b2.numero_bulto} abierto automáticamente`);
-                          await cargarTodo();
-                        } catch (er: any) { toast('error', er.message); }
-                      }}>📦 Cerrar bulto y abrir siguiente</button>
+            {pendientes.map((o: any) => (
+              <div key={o.id}
+                onClick={() => { if (!bultoAbierto && ordenSeleccionada?.id !== o.id) { setOrdenSeleccionada(o); setPickerItems([]); } }}
+                style={{ border: `2px solid ${ordenSeleccionada?.id === o.id ? '#3b82f6' : '#e5e7eb'}`, borderRadius: 10, padding: 14, marginBottom: 14, cursor: !bultoAbierto ? 'pointer' : 'default', background: ordenSeleccionada?.id === o.id && !bultoAbierto ? '#eff6ff' : '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong style={{ fontSize: 15 }}>{o.numero_orden}</strong>
+                    <span style={{ marginLeft: 10, color: 'var(--muted)' }}>{o.cliente_nombre}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className={`chip chip-${['empacando','buscada_completa','buscada'].includes(o.estado) ? 'verde' : 'warning'}`} style={{ fontSize: 11 }}>{String(o.estado).replace(/_/g,' ')}</span>
+                    {bultoAbierto && bundleActual!.orderId === o.id && ordenSeleccionada?.id !== o.id && (
+                      <button className="btn btn-primary" style={{ padding: '6px 14px' }} onClick={async (e) => {
+                        e.stopPropagation();
+                        setOrdenSeleccionada(o);
+                        await cargarPickerView(o.id);
+                      }}>Iniciar verificación</button>
                     )}
-                    <button className="btn btn-ghost" onClick={() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message))}>
-                      🖨️ Imprimir factura final
-                    </button>
+                    {ordenSeleccionada?.id === o.id && (
+                      <button className="btn btn-ghost" style={{ padding: '5px 12px' }} onClick={(e) => { e.stopPropagation(); setOrdenSeleccionada(null); setPickerItems([]); }}>Ocultar</button>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </article>
-      )}
+
+                {ordenSeleccionada?.id === o.id && bultoAbierto && bundleActual!.orderId === o.id && (
+                  <div style={{ marginTop: 14 }}>
+                    <table className="table-premium">
+                      <thead><tr><th>Producto</th><th>Esperado</th><th>Verificado</th><th>Acción</th></tr></thead>
+                      <tbody>
+                        {pickerItems.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>Cargando items...</td></tr>}
+                        {pickerItems.map((it: any) => (
+                          <tr key={it.id} style={{ background: Number(it.cantidad_verificada) >= Number(it.cantidad) ? '#f0fdf4' : undefined }}>
+                            <td style={{ textDecoration: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'line-through' : undefined, color: Number(it.cantidad_verificada) >= Number(it.cantidad) ? 'var(--muted)' : undefined }}>{it.descripcion}</td>
+                            <td style={{ textAlign: 'center' }}>{it.cantidad}</td>
+                            <td><input id={`verif-${it.id}`} type="number" min={0} defaultValue={Number(it.cantidad_verificada || it.cantidad || 0)} style={{ width: 70, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 6 }} /></td>
+                            <td>
+                              <button className="btn btn-primary" style={{ padding: '5px 14px' }} onClick={async () => {
+                                const el = document.getElementById(`verif-${it.id}`) as HTMLInputElement | null;
+                                const qty = Math.max(0, Number(el?.value || 0));
+                                try {
+                                  await api(`/orders/${o.id}/verificaciones`, token, { method: 'POST', body: JSON.stringify({ order_item_id: it.id, bundle_id: bundleActual!.id, cantidad_verificada: qty }) });
+                                  await cargarPickerView(o.id);
+                                } catch (er: any) { toast('error', er.message); }
+                              }}>Confirmar</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button className="btn btn-primary" style={{ fontSize: 14, padding: '9px 22px' }} onClick={async () => {
+                        try {
+                          const r = await api<any>(`/orders/${o.id}/bundles/${bundleActual!.id}/cerrar`, token, { method: 'POST' });
+                          toast('ok', `Bulto #${bundleActual!.numero_bulto} cerrado`);
+                          if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
+                          setTimeout(() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message)), 800);
+                          if (r?.siguiente_bulto) {
+                            setBundleActual({ orderId: o.id, ...r.siguiente_bulto });
+                            toast('ok', `📦 Bulto #${r.siguiente_bulto.numero_bulto} abierto automáticamente`);
+                          } else { setBundleActual(null); }
+                          await cargarTodo();
+                        } catch (er: any) { toast('error', er.message); }
+                      }}>📦 Cerrar bulto</button>
+                      <button className="btn btn-ghost" onClick={() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message))}>
+                        🖨️ Imprimir factura
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </article>
+        );
+      })()}
 
 
 

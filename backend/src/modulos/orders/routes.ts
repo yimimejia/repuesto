@@ -173,19 +173,25 @@ ordersRouter.post('/:id/bundles/:bundleId/cerrar', permitir('cajero', 'vendedor'
   const usuario = (req as any).usuario;
   db.prepare("UPDATE bundles SET estado='cerrado', cerrado_por_usuario_id=?, fecha_cierre=?, etiqueta_impresa_en=?, fecha_actualizacion=? WHERE id=? AND order_id=?")
     .run(usuario.id, now(), now(), now(), req.params.bundleId, req.params.id);
-  const bundle = db.prepare(`SELECT b.numero_bulto, o.numero_orden, c.codigo as cliente_codigo, c.nombre as cliente_nombre, c.direccion
+  const bundle = db.prepare(`SELECT b.numero_bulto, o.numero_orden, c.codigo as cliente_codigo, c.nombre as cliente_nombre, c.direccion, c.ciudad
     FROM bundles b JOIN orders o ON o.id=b.order_id JOIN clientes c ON c.id=o.cliente_id WHERE b.id=?`).get(req.params.bundleId) as any;
-  const next = db.prepare('SELECT COALESCE(MAX(numero_bulto),0)+1 as n FROM bundles WHERE order_id=?').get(req.params.id) as any;
-  db.prepare('INSERT OR IGNORE INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,"abierto",?,?)').run(uuid(), req.params.id, next.n, now(), now());
+  const nextN = (db.prepare('SELECT COALESCE(MAX(numero_bulto),0)+1 as n FROM bundles WHERE order_id=?').get(req.params.id) as any).n;
+  const nextId = uuid();
+  db.prepare('INSERT OR IGNORE INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,"abierto",?,?)').run(nextId, req.params.id, nextN, now(), now());
   registrarAuditoria('orders', String(req.params.id), 'cerrar_bulto', `Bulto ${bundle?.numero_bulto} cerrado`, usuario.id);
-  res.json({ ok: true, etiqueta: {
-    empresa: 'Importadora Repuestos Calcaño',
-    fecha: new Date().toLocaleDateString('es-DO'),
-    cliente_codigo: bundle?.cliente_codigo,
-    cliente_nombre: bundle?.cliente_nombre,
-    direccion: bundle?.direccion,
-    bulto: bundle?.numero_bulto,
-  } });
+  res.json({
+    ok: true,
+    etiqueta: {
+      fecha: new Date().toLocaleDateString('es-DO'),
+      cliente_codigo: bundle?.cliente_codigo,
+      cliente_nombre: bundle?.cliente_nombre,
+      direccion: bundle?.direccion,
+      ciudad: bundle?.ciudad,
+      numero_orden: bundle?.numero_orden,
+      bulto: bundle?.numero_bulto,
+    },
+    siguiente_bulto: { id: nextId, numero_bulto: nextN, estado: 'abierto' },
+  });
 });
 
 
@@ -206,56 +212,159 @@ ordersRouter.get('/:id/bundles/:bundleId/label', permitir('cajero', 'vendedor', 
 });
 
 ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vendedor'), permitirCapacidad('can_verify'), (req, res) => {
-  const o = db.prepare(`SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo, c.direccion, v.ncf, v.tipo_comprobante
-    FROM orders o JOIN clientes c ON c.id=o.cliente_id LEFT JOIN ventas v ON v.id=o.venta_origen_id WHERE o.id=?`).get(req.params.id) as any;
+  const o = db.prepare(`
+    SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo, c.direccion, c.ciudad,
+      c.cedula_rnc as cliente_rnc, c.telefono_1, c.porcentaje_descuento,
+      u.nombre_completo as vendedor_nombre,
+      v.ncf, v.tipo_comprobante, v.fecha_vencimiento_ncf
+    FROM orders o
+    JOIN clientes c ON c.id=o.cliente_id
+    JOIN usuarios u ON u.id=o.usuario_creador_id
+    LEFT JOIN ventas v ON v.id=o.venta_origen_id
+    WHERE o.id=?`).get(req.params.id) as any;
   if (!o) return res.status(404).json({ error: 'Orden no encontrada' });
-  const items = db.prepare('SELECT descripcion, cantidad, precio_unitario, (cantidad*precio_unitario) as total FROM order_items WHERE order_id=?').all(req.params.id);
-  const bultos = db.prepare('SELECT COUNT(*) as c FROM bundles WHERE order_id=?').get(req.params.id) as any;
-  const fechaDoc = new Date().toLocaleString('es-DO');
-  const total = items.reduce((acc: number, item: any) => acc + Number(item.total || 0), 0);
-  const rows = items.map((it: any, idx: number) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${it.descripcion ?? ''}</td>
-        <td style="text-align:right">${Number(it.cantidad || 0).toFixed(0)}</td>
-        <td style="text-align:right">RD$ ${Number(it.precio_unitario || 0).toFixed(2)}</td>
-        <td style="text-align:right">RD$ ${Number(it.total || 0).toFixed(2)}</td>
-      </tr>`).join('');
-  res.json({
-    preview_html: `<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Factura final ${o.numero_orden}</title>
-      <style>
-        @page { size: 8.5in 11in; margin: 0.5in; }
-        body { font-family: Arial, sans-serif; color: #111; }
-        h1,h2,p { margin: 0; }
-        .head { margin-bottom: 14px; }
-        .muted { color: #475569; font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-        th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; }
-        th { background: #f8fafc; text-align: left; }
-        .totales { margin-top: 14px; display: flex; justify-content: flex-end; }
-        .totales div { min-width: 260px; border: 1px solid #cbd5e1; padding: 10px; }
-      </style>
-    </head><body>
-      <div class="head">
-        <h2>Importadora Repuestos Calcaño</h2>
-        <p class="muted">Fecha: ${fechaDoc}</p>
-        <p class="muted">Orden: ${o.numero_orden}</p>
-        <p class="muted">Cliente: ${o.cliente_nombre} (${o.cliente_codigo ?? '-'})</p>
-        <p class="muted">Dirección: ${o.direccion ?? '-'}</p>
-        <p class="muted">NCF: ${o.ncf ?? '-'}</p>
-        <p class="muted">Total bultos empacados: ${bultos.c}</p>
+
+  const items = db.prepare(`
+    SELECT oi.descripcion, oi.cantidad, oi.precio_unitario,
+      p.codigo as producto_codigo,
+      (SELECT b.numero_bulto FROM bundle_items bi JOIN bundles b ON b.id=bi.bundle_id
+       WHERE bi.order_item_id=oi.id LIMIT 1) as bulto_num
+    FROM order_items oi
+    LEFT JOIN productos p ON p.id=oi.producto_id
+    WHERE oi.order_id=?
+    ORDER BY oi.descripcion`).all(req.params.id) as any[];
+
+  const totalBultos = (db.prepare('SELECT COUNT(*) as c FROM bundles WHERE order_id=?').get(req.params.id) as any).c;
+  const desc_pct = Number(o.porcentaje_descuento || 0);
+  const fmt = (n: number) => n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  let subTotal = 0, totalDesc = 0, totalItbis = 0, totalNeto = 0;
+  const rows = items.map((it: any) => {
+    const precio = Number(it.precio_unitario || 0);
+    const cant = Number(it.cantidad || 0);
+    const descUnit = precio * (desc_pct / 100);
+    const baseNeta = precio - descUnit;
+    const itbisUnit = baseNeta * 0.18;
+    const precioNeto = baseNeta + itbisUnit;
+    const totalLinea = precioNeto * cant;
+    subTotal += precio * cant;
+    totalDesc += descUnit * cant;
+    totalItbis += itbisUnit * cant;
+    totalNeto += totalLinea;
+    return `<tr>
+      <td>${it.producto_codigo ?? ''}</td>
+      <td style="text-align:center">${cant.toFixed(2)}</td>
+      <td style="text-align:center">${it.bulto_num ?? '-'}</td>
+      <td style="text-align:center">UNI</td>
+      <td>${(it.descripcion ?? '').toUpperCase()}</td>
+      <td style="text-align:right">${fmt(precio)}</td>
+      <td style="text-align:right">${fmt(descUnit)}</td>
+      <td style="text-align:right">${fmt(itbisUnit)}</td>
+      <td style="text-align:right">${fmt(precioNeto)}</td>
+      <td style="text-align:right">${fmt(totalLinea)}</td>
+    </tr>`;
+  }).join('');
+
+  const fechaDoc = new Date().toLocaleDateString('es-DO');
+  const ncfVence = o.fecha_vencimiento_ncf ? new Date(o.fecha_vencimiento_ncf).toLocaleDateString('es-DO') : '-';
+  const tipoComp = o.tipo_comprobante === 'credito_fiscal' ? 'CRÉDITO FISCAL' : o.tipo_comprobante === 'consumidor_final' ? 'CONSUMIDOR FINAL' : (o.tipo_comprobante ?? 'CRÉDITO FISCAL');
+
+  const irc_svg = `<svg xmlns="http://www.w3.org/2000/svg" width="90" height="70" viewBox="0 0 90 70">
+    <g transform="translate(5,5)">
+      <circle cx="28" cy="30" r="24" fill="none" stroke="#0a2d6e" stroke-width="5"/>
+      <circle cx="28" cy="30" r="15" fill="none" stroke="#0a2d6e" stroke-width="3"/>
+      <text x="28" y="36" text-anchor="middle" font-size="14" font-family="Arial" font-weight="900" fill="#b91c1c">@</text>
+      ${[0,45,90,135,180,225,270,315].map(a=>`<rect x="24.5" y="2" width="7" height="9" rx="2" fill="#0a2d6e" transform="rotate(${a} 28 30)"/>`).join('')}
+    </g>
+    <text x="60" y="38" text-anchor="middle" font-size="28" font-family="Arial" font-weight="900"><tspan fill="#0a2d6e">I</tspan><tspan fill="#b91c1c">R</tspan><tspan fill="#0a2d6e">C</tspan></text>
+  </svg>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <title>Factura ${o.numero_orden}</title>
+  <style>
+    @page { size: 8.5in 11in; margin: 0.4in 0.5in; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 10px; color: #111; }
+    .header { display: grid; grid-template-columns: 110px 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+    .logo-box { display: flex; flex-direction: column; align-items: flex-start; }
+    .company-name { font-size: 13px; font-weight: 900; text-align: center; grid-column: 1/-1; margin-bottom: 4px; }
+    .desc-box { border: 1px solid #aaa; padding: 4px 6px; font-size: 8.5px; line-height: 1.4; }
+    .addr-box { border: 1px solid #aaa; padding: 4px 6px; font-size: 8.5px; text-align: right; }
+    .center-box { text-align: center; font-size: 10px; }
+    .fiscal-box { border: 1px solid #aaa; padding: 4px 6px; font-size: 8.5px; }
+    .factura-title { font-size: 12px; font-weight: 700; }
+    .pedido-row { display: flex; justify-content: flex-end; gap: 30px; font-size: 9px; margin-bottom: 4px; }
+    .client-section { border: 1px solid #aaa; padding: 5px 8px; margin-bottom: 6px; font-size: 9px; line-height: 1.7; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f0f0f0; border: 1px solid #888; padding: 3px 4px; font-size: 8px; text-align: center; }
+    td { border: 1px solid #aaa; padding: 2px 4px; font-size: 8.5px; }
+    .totals-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
+    .totals-table td { border: none; padding: 2px 6px; font-size: 9px; text-align: right; }
+    .totals-table td:first-child { text-align: left; }
+    .sig-row { display: flex; justify-content: space-around; margin-top: 30px; }
+    .sig-box { text-align: center; border-top: 1px solid #333; padding-top: 4px; width: 180px; font-size: 9px; }
+    .footer-logos { display: flex; justify-content: center; gap: 40px; margin-top: 16px; align-items: center; }
+    .footer-logo { font-size: 18px; font-weight: 900; }
+    .footer-logo.linumax { color: #e63946; }
+    .footer-logo.haojue { color: #1d3557; }
+  </style>
+  </head><body>
+  <div class="company-name">IMPORTADORA REPUESTOS CALCAÑO SRL</div>
+  <div class="header">
+    <div class="logo-box">${irc_svg}</div>
+    <div class="desc-box">COMERCIALIZACION Y DISTRIBUCION DE<br/>REPUESTOS ORIGINALES Y DE ALTA<br/>CALIDAD PARA MOTOCICLETAS
+      <br/><br/>
+      <div class="center-box"><div class="factura-title">FACTURA</div><div>VALIDA PARA CREDITO FISCAL</div></div>
+    </div>
+    <div>
+      <div class="addr-box">VILLA MAGDALENA SAN PEDRO<br/>DE MACORIS RNC:130716171</div>
+      <div class="fiscal-box" style="margin-top:4px">
+        <div>FECHA: ${fechaDoc}</div>
+        <div>VENCE: ${ncfVence}</div>
+        <div>NCF: ${o.ncf ?? '-'}</div>
+        <div>(${tipoComp})</div>
       </div>
-      <table>
-        <thead>
-          <tr><th>#</th><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div class="totales">
-        <div><strong>Total general: RD$ ${total.toFixed(2)}</strong></div>
-      </div>
-    </body></html>`,
-    data: { orden: o, items, total_bultos: bultos.c },
+    </div>
+  </div>
+  <div class="pedido-row">
+    <span>PEDIDO ${o.numero_orden}</span>
+    <span>FACT NO. ${o.numero_orden}</span>
+  </div>
+  <div class="client-section">
+    <strong>CLIENTE</strong><br/>
+    COD: ${o.cliente_codigo ?? '-'} &nbsp;&nbsp;&nbsp;
+    NOMBRE: ${(o.cliente_nombre ?? '').toUpperCase()}<br/>
+    RNC: ${o.cliente_rnc ?? '-'}<br/>
+    DIRECCIÓN: ${(o.direccion ?? '').toUpperCase()}<br/>
+    VENDEDOR: ${(o.vendedor_nombre ?? '').toUpperCase()} &nbsp;&nbsp;&nbsp; TEL: ${o.telefono_1 ?? '-'}
+  </div>
+  <table>
+    <thead><tr>
+      <th>COD</th><th>CANT</th><th>BULTO</th><th>REF</th><th style="text-align:left">DESCRIPCION</th>
+      <th>PRECIO</th><th>DESCUENTO</th><th>ITBIS</th><th>PRECIO NETO</th><th>TOTAL NETO</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="totals-row">
+    <div style="font-size:10px;font-weight:700">TOTAL BULTOS: ${totalBultos}</div>
+    <table class="totals-table" style="width:220px">
+      <tr><td>SUB-TOTAL</td><td>${fmt(subTotal)}</td></tr>
+      <tr><td>ITBIS</td><td>${fmt(totalItbis)}</td></tr>
+      <tr><td>${desc_pct > 0 ? desc_pct + '%' : ''} DESCUENTO</td><td>${fmt(totalDesc)}</td></tr>
+      <tr><td><strong>TOTAL NETO</strong></td><td><strong>${fmt(totalNeto)}</strong></td></tr>
+    </table>
+  </div>
+  <div class="sig-row">
+    <div class="sig-box">Despachado por:</div>
+    <div class="sig-box">Recibido conforme:</div>
+  </div>
+  <div class="footer-logos">
+    <span class="footer-logo linumax">🏍 LINUMAX</span>
+    <span class="footer-logo haojue">W Haojue</span>
+  </div>
+  </body></html>`;
+
+  res.json({ preview_html: html, data: { orden: o, items, total_bultos: totalBultos },
   });
 });
 
