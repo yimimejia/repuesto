@@ -2536,8 +2536,8 @@ function App() {
 
       {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || usuario.rol === 'administrador' || tieneCapacidad('can_verify')) && (
         <article className="panel-card">
-          <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => String(o.picker_asignado_id ?? o.picker_usuario_id ?? '') === String(usuario.id) || String(o.picker_asignado ?? '') === String(usuario.nombre)).length}</span></div>
-          {ordenes.filter((o: any) => String(o.picker_asignado_id ?? o.picker_usuario_id ?? '') === String(usuario.id) || String(o.picker_asignado ?? '') === String(usuario.nombre)).map((o: any) => (
+          <div className="panel-head"><h3>Pendiente verificar</h3><span className="chip chip-warning">{ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion'].includes(o.estado)).length}</span></div>
+          {ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion'].includes(o.estado)).map((o: any) => (
             <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 10, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <strong>{o.numero_orden} · {o.cliente_nombre}</strong>
