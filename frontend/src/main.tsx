@@ -363,6 +363,19 @@ function App() {
   }
 
   useEffect(() => { cargarTodo().catch((e) => toast('error', e.message)); }, [token, usuario?.rol]);
+
+  // Auto-conexión silenciosa a QZ Tray al iniciar sesión
+  useEffect(() => {
+    if (!token) return;
+    setQzStatus('conectando');
+    qzConnect()
+      .then(() => qzGetPrinters())
+      .then((printers) => {
+        setQzPrinters(printers);
+        setQzStatus('conectado');
+      })
+      .catch(() => setQzStatus('desconectado'));
+  }, [token]);
   useEffect(() => {
     if (!token) return;
     const ws = new WebSocket(WS_URL);
