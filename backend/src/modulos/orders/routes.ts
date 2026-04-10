@@ -161,7 +161,7 @@ ordersRouter.post('/:id/verificar/iniciar', permitir('cajero', 'vendedor', 'admi
 ordersRouter.post('/:id/bundles', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
   const next = db.prepare('SELECT COALESCE(MAX(numero_bulto),0)+1 as n FROM bundles WHERE order_id=?').get(req.params.id) as any;
   const id = uuid();
-  db.prepare('INSERT INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,"abierto",?,?)').run(id, req.params.id, next.n, now(), now());
+  db.prepare('INSERT INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,?,?,?)').run(id, req.params.id, next.n, 'abierto', now(), now());
   res.status(201).json({ id, numero_bulto: next.n, estado: 'abierto' });
 });
 
@@ -193,7 +193,7 @@ ordersRouter.post('/:id/bundles/:bundleId/cerrar', permitir('cajero', 'vendedor'
     FROM bundles b JOIN orders o ON o.id=b.order_id JOIN clientes c ON c.id=o.cliente_id WHERE b.id=?`).get(req.params.bundleId) as any;
   const nextN = (db.prepare('SELECT COALESCE(MAX(numero_bulto),0)+1 as n FROM bundles WHERE order_id=?').get(req.params.id) as any).n;
   const nextId = uuid();
-  db.prepare('INSERT OR IGNORE INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,"abierto",?,?)').run(nextId, req.params.id, nextN, now(), now());
+  db.prepare('INSERT OR IGNORE INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,?,?,?)').run(nextId, req.params.id, nextN, 'abierto', now(), now());
   registrarAuditoria('orders', String(req.params.id), 'cerrar_bulto', `Bulto ${bundle?.numero_bulto} cerrado`, usuario.id);
   res.json({
     ok: true,
