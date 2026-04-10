@@ -1,0 +1,79 @@
+La arquitectura usa dos variables de entorno del servidor y tres endpoints de API. El certificado y la clave privada son los mismos — solo tienes que copiarlos desde los secrets de este proyecto a los del otro.
+
+1. Variables de entorno a copiar
+En el servidor nuevo necesitas las mismas dos:
+
+Secret	Qué es
+QZ_CERTIFICATE	El certificado X.509 (BEGIN CERTIFICATE)
+QZ_PRIVATE_KEY	La clave privada RSA (BEGIN PRIVATE KEY)
+Son los mismos valores exactos que están en este proyecto — los dos proyectos pueden compartir el mismo par de llaves. El usuario solo necesita instalar el .crt una sola vez en QZ Tray Site Manager.
+
+2. Tres endpoints en el backend (Node.js / Express)
+import crypto from 'node:crypto';
+// GET /api/qz/cert  — devuelve el certificado (sin auth)
+app.get('/api/qz/cert', (_req, res) => {
+  const cert = process.env.QZ_CERTIFICATE;
+  if (!cert) return res.status(503).type('text/plain').send('');
+  res.type('text/plain').send(cert.replace(/\\n/g, '\n'));
+});
+// GET /api/qz/cert/download  — descarga el .crt para instalarlo en QZ Tray (sin auth)
+app.get('/api/qz/cert/download', (_req, res) => {
+  const cert = process.env.QZ_CERTIFICATE;
+  if (!cert) return res.status(503).send('No configurado');
+  res.setHeader('Content-Disposition', 'attachment; filename="miapp-qztray.crt"');
+  res.type('text/plain').send(cert.replace(/\\n/g, '\n'));
+});
+// POST /api/qz/sign  — firma el payload para QZ Tray (sin auth de usuario)
+app.post('/api/qz/sign', (req, res) => {
+  const privateKeyPem = process.env.QZ_PRIVATE_KEY;
+  if (!privateKeyPem) return res.status(503).json({ error: 'Sin clave privada' });
+  try {
+    const { payload } = req.body;          // string que manda QZ Tray
+    const signature = crypto
+      .createSign('SHA512')
+      .update(payload)
+      .sign(privateKeyPem, 'base64');
+    res.json({ signature });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+3. Frontend — conexión QZ Tray
+Incluye primero la librería qz-tray.js (la misma que está en /public/qz-tray.js) y luego:
+
+// ── Antes de connect(): certificado + firma ──────────────────────
+qz.security.setCertificatePromise((resolve, reject) => {
+  fetch('/api/qz/cert')
+    .then(r => r.text())
+    .then(resolve)
+    .catch(reject);
+});
+qz.security.setSignaturePromise(async (toSign) => {
+  const res = await fetch('/api/qz/sign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload: toSign }),
+  });
+  const json = await res.json();
+  return json.signature;          // string base64
+});
+// ── Conectar ─────────────────────────────────────────────────────
+await qz.websocket.connect({
+  host: ['localhost'],
+  port: { secure: [8183, 8181], insecure: [8182, 8080] },
+  usingSecure: location.protocol === 'https:',
+  keepAlive: 60,
+  retries: 1,
+});
+// ── IMPORTANTE: setSignatureAlgorithm va DESPUÉS de connect() ────
+// QZ Tray ignora esta llamada si se hace antes de conectar.
+qz.security.setSignatureAlgorithm('SHA512');
+// Ya conectado — puedes listar impresoras:
+const printers = await qz.printers.find();
+
+Puntos clave
+setSignatureAlgorithm('SHA512') va siempre DESPUÉS de connect() — si lo pones antes, QZ Tray lo ignora silenciosamente y la firma fallará.
+Los endpoints /cert y /sign no llevan autenticación de usuario porque QZ Tray los llama durante el handshake, antes de que exista sesión.
+El certificado .crt se instala una sola vez en QZ Tray → Site Manager → Add. Después QZ Tray nunca vuelve a mostrar el diálogo de permisos.
+Si ya instalaste el certificado en QZ Tray para este proyecto, no necesitas instalarlo de nuevo para el otro — es el mismo par de llaves.
