@@ -13,7 +13,9 @@ ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscado
   const base = `SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo,
     u.nombre_completo as usuario_creador,
     (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) as cantidad_items,
-    (SELECT u2.nombre_completo FROM order_assignments oa JOIN usuarios u2 ON u2.id=oa.picker_usuario_id WHERE oa.order_id=o.id ORDER BY oa.fecha_creacion DESC LIMIT 1) as picker_asignado
+    (SELECT u2.nombre_completo FROM order_assignments oa JOIN usuarios u2 ON u2.id=oa.picker_usuario_id WHERE oa.order_id=o.id ORDER BY oa.fecha_creacion DESC LIMIT 1) as picker_asignado,
+    (SELECT COUNT(*) FROM bundles b WHERE b.order_id=o.id) as total_bultos,
+    (SELECT GROUP_CONCAT(CAST(b2.numero_bulto AS TEXT), ', ') FROM bundles b2 WHERE b2.order_id=o.id ORDER BY b2.numero_bulto) as bultos_lista
     FROM orders o
     JOIN clientes c ON c.id=o.cliente_id
     JOIN usuarios u ON u.id=o.usuario_creador_id`;
@@ -123,6 +125,18 @@ ordersRouter.post('/:id/items/:itemId/found', permitir('buscador', 'vendedor', '
   const pending = db.prepare('SELECT COUNT(*) as c FROM order_items WHERE order_id=? AND encontrado=0').get(req.params.id) as any;
   if (Number(pending.c) === 0) db.prepare("UPDATE orders SET estado='buscada', fecha_actualizacion=? WHERE id=?").run(now(), req.params.id);
   registrarAuditoria('orders', String(req.params.id), 'item_buscado', `Item ${req.params.itemId} buscado`, usuario.id);
+  res.json({ ok: true });
+});
+
+ordersRouter.post('/:id/cambiar-estado', permitir('cajero', 'administrador'), (req, res) => {
+  const { estado } = req.body as any;
+  const validos = ['creada','en_busqueda','buscada','buscada_completa','en_verificacion','empacando','verificada','completada'];
+  if (!validos.includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
+  const order = db.prepare('SELECT id FROM orders WHERE id=?').get(req.params.id) as any;
+  if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
+  db.prepare('UPDATE orders SET estado=?, fecha_actualizacion=? WHERE id=?').run(estado, now(), req.params.id);
+  const usuario = (req as any).usuario;
+  registrarAuditoria('orders', String(req.params.id), 'estado_cambiado', `Estado → ${estado}`, usuario.id);
   res.json({ ok: true });
 });
 

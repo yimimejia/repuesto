@@ -2492,51 +2492,126 @@ function App() {
         </article>
       )}
 
-      {modulo === 'ordenes' && usuario.rol !== 'vendedor' && (
+      {modulo === 'ordenes' && usuario.rol !== 'vendedor' && (() => {
+        const estadoChip: Record<string, string> = {
+          creada: 'chip-warning', en_busqueda: 'chip-warning', buscada: 'chip-soft',
+          buscada_completa: 'chip-soft', en_verificacion: 'chip-primary', empacando: 'chip-primary',
+          verificada: 'chip-verde', completada: 'chip-verde',
+        };
+        const estadoLabel: Record<string, string> = {
+          creada: 'Creada', en_busqueda: 'En búsqueda', buscada: 'Buscada',
+          buscada_completa: 'Búsqueda completa', en_verificacion: 'En verificación',
+          empacando: 'Empacando', verificada: 'Verificada', completada: 'Completada',
+        };
+        const avanzarEstado = async (o: any, nuevoEstado: string) => {
+          try {
+            await api(`/orders/${o.id}/cambiar-estado`, token, { method: 'POST', body: JSON.stringify({ estado: nuevoEstado }) });
+            toast('ok', `Estado → ${estadoLabel[nuevoEstado] ?? nuevoEstado}`);
+            await cargarTodo();
+          } catch (er: any) { toast('error', er.message); }
+        };
+        return (
         <article className="panel-card span-12">
           <div className="panel-head">
             <h3>Órdenes / Pedidos</h3>
             <span className="chip chip-soft">{ordenes.length} órdenes</span>
           </div>
           <table className="table-premium">
-            <thead><tr><th>Orden</th><th>Cliente</th><th>Estado</th><th>Creada por</th><th>Picker</th><th>Acciones</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Orden</th><th>Cliente</th><th>Vendedor</th>
+                <th>Estado</th><th>Bultos</th><th>Acciones</th>
+              </tr>
+            </thead>
             <tbody>
-              {ordenes.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin órdenes</td></tr> : ordenes.map((o: any) => (
+              {ordenes.length === 0
+                ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin órdenes</td></tr>
+                : ordenes.map((o: any) => (
                 <tr key={o.id}>
-                  <td>{o.numero_orden}</td><td>{o.cliente_nombre}</td><td>{o.estado}</td><td>{o.usuario_creador}</td><td>{o.picker_asignado || '-'}</td>
-                  <td style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-ghost" onClick={async () => { setOrdenSeleccionada(o); await cargarPickerView(o.id); }}>Ver detalle</button>
-                    {(usuario.rol === 'cajero' || usuario.rol === 'administrador') && (
-                      <select defaultValue="" onChange={(e) => {
-                        if (!e.target.value) return;
-                        api(`/orders/${o.id}/asignar-picker`, token, { method: 'POST', body: JSON.stringify({ picker_usuario_id: e.target.value }) })
-                          .then(() => { toast('ok', 'Buscador asignado'); cargarTodo(); })
-                          .catch((er: any) => toast('error', er.message));
-                      }}>
-                        <option value="">Asignar empleado...</option>
-                        {pickers.map((p: any) => <option key={p.id} value={p.id}>{p.nombre_completo}{p.rol ? ` (${p.rol})` : ''}</option>)}
-                      </select>
-                    )}
+                  <td><strong style={{ fontSize: 13 }}>{o.numero_orden}</strong></td>
+                  <td>{o.cliente_nombre}</td>
+                  <td style={{ color: 'var(--muted)', fontSize: 12 }}>{o.usuario_creador}</td>
+                  <td>
+                    <span className={`chip ${estadoChip[o.estado] ?? 'chip-soft'}`} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                      {estadoLabel[o.estado] ?? o.estado}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12 }}>
+                    {Number(o.total_bultos) > 0
+                      ? <span title={`Bultos: ${o.bultos_lista}`}>📦 {o.total_bultos} ({o.bultos_lista})</span>
+                      : <span style={{ color: 'var(--muted)' }}>—</span>}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {(usuario.rol === 'cajero' || usuario.rol === 'administrador') && <>
+                        {o.estado === 'creada' && (
+                          <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}
+                            onClick={() => avanzarEstado(o, 'en_busqueda')}>▶ Iniciar búsqueda</button>
+                        )}
+                        {o.estado === 'en_busqueda' && (
+                          <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}
+                            onClick={() => avanzarEstado(o, 'buscada')}>✓ Marcar buscada</button>
+                        )}
+                        {(o.estado === 'buscada' || o.estado === 'buscada_completa') && (
+                          <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }}
+                            onClick={() => avanzarEstado(o, 'en_verificacion')}>→ En verificación</button>
+                        )}
+                        {(o.estado === 'en_verificacion' || o.estado === 'empacando') && (
+                          <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }}
+                            onClick={() => avanzarEstado(o, 'verificada')}>✓ Verificada</button>
+                        )}
+                        {o.estado === 'verificada' && (
+                          <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#16a34a' }}
+                            onClick={() => avanzarEstado(o, 'completada')}>✅ Completar</button>
+                        )}
+                        <select defaultValue="" style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db' }}
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            api(`/orders/${o.id}/asignar-picker`, token, { method: 'POST', body: JSON.stringify({ picker_usuario_id: e.target.value }) })
+                              .then(() => { toast('ok', 'Empleado asignado'); cargarTodo(); })
+                              .catch((er: any) => toast('error', er.message));
+                          }}>
+                          <option value="">👤 Asignar...</option>
+                          {pickers.map((p: any) => <option key={p.id} value={p.id}>{p.nombre_completo}{p.rol ? ` (${p.rol})` : ''}</option>)}
+                        </select>
+                      </>}
+                      <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}
+                        onClick={async () => {
+                          if (ordenSeleccionada?.id === o.id) { setOrdenSeleccionada(null); setPickerItems([]); }
+                          else { setOrdenSeleccionada(o); await cargarPickerView(o.id); }
+                        }}>
+                        {ordenSeleccionada?.id === o.id ? 'Ocultar' : '📋 Items'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {ordenSeleccionada && (
-            <div style={{ marginTop: 14 }}>
-              <h4>Checklist de búsqueda · {ordenSeleccionada.numero_orden}</h4>
+            <div style={{ marginTop: 14, border: '1px solid #e5e7eb', borderRadius: 10, padding: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h4 style={{ margin: 0 }}>Items · {ordenSeleccionada.numero_orden}</h4>
+                <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}
+                  onClick={() => { setOrdenSeleccionada(null); setPickerItems([]); }}>✕ Cerrar</button>
+              </div>
               <table className="table-premium">
-                <thead><tr><th>Producto</th><th>Marca</th><th>Cantidad</th><th>Ubicación</th><th>Encontrado</th></tr></thead>
+                <thead><tr><th>Producto</th><th>Marca</th><th>Cant.</th><th>Ubicación</th><th>Encontrado</th></tr></thead>
                 <tbody>
-                  {pickerItems.map((it: any) => (
-                    <tr key={it.id}>
-                      <td>{it.descripcion}</td><td>{it.marca || '-'}</td><td>{it.cantidad}</td><td>{it.ubicacion || '-'}</td>
-                      <td><input type="checkbox" checked={!!it.encontrado} onChange={async (e) => {
-                        if (!e.target.checked) return;
-                        await api(`/orders/${ordenSeleccionada.id}/items/${it.id}/found`, token, { method: 'POST' });
-                        await cargarPickerView(ordenSeleccionada.id);
-                        await cargarTodo();
-                      }} /></td>
+                  {pickerItems.length === 0
+                    ? <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin items</td></tr>
+                    : pickerItems.map((it: any) => (
+                    <tr key={it.id} style={{ background: it.encontrado ? '#f0fdf4' : undefined }}>
+                      <td style={{ textDecoration: it.encontrado ? 'line-through' : undefined, color: it.encontrado ? 'var(--muted)' : undefined }}>{it.descripcion}</td>
+                      <td>{it.marca || '-'}</td><td>{it.cantidad}</td><td>{it.ubicacion || '-'}</td>
+                      <td>
+                        <input type="checkbox" checked={!!it.encontrado} onChange={async (e) => {
+                          if (!e.target.checked) return;
+                          await api(`/orders/${ordenSeleccionada.id}/items/${it.id}/found`, token, { method: 'POST' });
+                          await cargarPickerView(ordenSeleccionada.id);
+                          await cargarTodo();
+                        }} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2544,7 +2619,8 @@ function App() {
             </div>
           )}
         </article>
-      )}
+        );
+      })()}
 
       {modulo === 'pendiente-verificar' && (usuario.rol === 'cajero' || usuario.rol === 'administrador' || tieneCapacidad('can_verify')) && (() => {
         const pendientes = ordenes.filter((o: any) => ['buscada','buscada_completa','en_verificacion','pendiente_verificacion','empacando'].includes(o.estado));
