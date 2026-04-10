@@ -18,7 +18,7 @@ ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscado
     JOIN clientes c ON c.id=o.cliente_id
     JOIN usuarios u ON u.id=o.usuario_creador_id`;
 
-  const rows = usuario.rol === 'buscador'
+  const rows = (usuario.rol === 'buscador' || usuario.rol === 'vendedor')
     ? db.prepare(base + ` WHERE EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id=o.id AND oa.picker_usuario_id=?) ORDER BY o.fecha_creacion DESC`).all(usuario.id)
     : usuario.rol === 'revendedor'
       ? db.prepare(base + ' WHERE o.usuario_creador_id=? ORDER BY o.fecha_creacion DESC').all(usuario.id)
@@ -109,13 +109,13 @@ ordersRouter.post('/:id/asignar-picker', permitir('cajero', 'administrador'), pe
   res.json({ ok: true });
 });
 
-ordersRouter.get('/:id/picker-view', permitir('buscador', 'administrador', 'cajero'), (req, res) => {
+ordersRouter.get('/:id/picker-view', permitir('buscador', 'vendedor', 'administrador', 'cajero'), (req, res) => {
   const items = db.prepare(`SELECT oi.id, oi.descripcion, oi.marca, oi.cantidad, oi.ubicacion, oi.encontrado
     FROM order_items oi WHERE oi.order_id=? ORDER BY oi.descripcion`).all(req.params.id);
   res.json(items);
 });
 
-ordersRouter.post('/:id/items/:itemId/found', permitir('buscador', 'administrador', 'cajero'), (req, res) => {
+ordersRouter.post('/:id/items/:itemId/found', permitir('buscador', 'vendedor', 'administrador', 'cajero'), (req, res) => {
   const usuario = (req as any).usuario;
   db.prepare('UPDATE order_items SET encontrado=1 WHERE id=? AND order_id=?').run(req.params.itemId, req.params.id);
   const pending = db.prepare('SELECT COUNT(*) as c FROM order_items WHERE order_id=? AND encontrado=0').get(req.params.id) as any;

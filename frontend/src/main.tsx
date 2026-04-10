@@ -2396,16 +2396,74 @@ function App() {
         </div>
       )}
 
-      {modulo === 'ordenes' && (
+      {modulo === 'ordenes' && usuario.rol === 'vendedor' && (
         <article className="panel-card span-12">
           <div className="panel-head">
-            <h3>{usuario.rol === 'vendedor' ? 'Órdenes asignadas' : 'Órdenes / Pedidos'}</h3>
+            <h3>Órdenes asignadas</h3>
+            <span className="chip chip-soft">{ordenes.length} {ordenes.length === 1 ? 'orden' : 'órdenes'}</span>
+          </div>
+          {ordenes.length === 0 && (
+            <p style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No tienes órdenes asignadas en este momento.</p>
+          )}
+          {ordenes.map((o: any) => (
+            <div key={o.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                  <strong style={{ fontSize: 16 }}>{o.numero_orden}</strong>
+                  <span style={{ marginLeft: 12, color: 'var(--muted)' }}>{o.cliente_nombre}</span>
+                </div>
+                <span className={`chip chip-${o.estado === 'buscada' ? 'verde' : 'warning'}`}>{String(o.estado).replace(/_/g, ' ')}</span>
+              </div>
+              <button className="btn btn-ghost" style={{ marginBottom: 10 }} onClick={async () => {
+                if (ordenSeleccionada?.id === o.id) { setOrdenSeleccionada(null); setPickerItems([]); }
+                else { setOrdenSeleccionada(o); await cargarPickerView(o.id); }
+              }}>
+                {ordenSeleccionada?.id === o.id ? 'Ocultar checklist' : '📋 Ver checklist de búsqueda'}
+              </button>
+              {ordenSeleccionada?.id === o.id && (
+                <table className="table-premium">
+                  <thead><tr><th>Encontrado</th><th>Producto</th><th>Marca</th><th>Cant.</th><th>Ubicación</th></tr></thead>
+                  <tbody>
+                    {pickerItems.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center' }}>Sin items</td></tr>}
+                    {pickerItems.map((it: any) => (
+                      <tr key={it.id} style={{ background: it.encontrado ? '#f0fdf4' : undefined }}>
+                        <td style={{ textAlign: 'center' }}>
+                          <input type="checkbox" checked={!!it.encontrado} style={{ width: 18, height: 18, cursor: it.encontrado ? 'default' : 'pointer' }} onChange={async (e) => {
+                            if (!e.target.checked || it.encontrado) return;
+                            await api(`/orders/${o.id}/items/${it.id}/found`, token, { method: 'POST' });
+                            await cargarPickerView(o.id);
+                            await cargarTodo();
+                          }} />
+                        </td>
+                        <td style={{ textDecoration: it.encontrado ? 'line-through' : undefined, color: it.encontrado ? 'var(--muted)' : undefined }}>{it.descripcion}</td>
+                        <td>{it.marca || '-'}</td>
+                        <td>{it.cantidad}</td>
+                        <td>{it.ubicacion || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {ordenSeleccionada?.id === o.id && pickerItems.length > 0 && (
+                <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>
+                  {pickerItems.filter((i: any) => i.encontrado).length} de {pickerItems.length} items encontrados
+                </div>
+              )}
+            </div>
+          ))}
+        </article>
+      )}
+
+      {modulo === 'ordenes' && usuario.rol !== 'vendedor' && (
+        <article className="panel-card span-12">
+          <div className="panel-head">
+            <h3>Órdenes / Pedidos</h3>
             <span className="chip chip-soft">{ordenes.length} órdenes</span>
           </div>
           <table className="table-premium">
             <thead><tr><th>Orden</th><th>Cliente</th><th>Estado</th><th>Creada por</th><th>Picker</th><th>Acciones</th></tr></thead>
             <tbody>
-              {ordenes.filter((o: any) => usuario.rol !== 'vendedor' || (Array.isArray(o.asignados_a) && o.asignados_a.includes(usuario.id))).length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin órdenes asignadas</td></tr> : ordenes.filter((o: any) => usuario.rol !== 'vendedor' || (Array.isArray(o.asignados_a) && o.asignados_a.includes(usuario.id))).map((o: any) => (
+              {ordenes.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center' }}>Sin órdenes</td></tr> : ordenes.map((o: any) => (
                 <tr key={o.id}>
                   <td>{o.numero_orden}</td><td>{o.cliente_nombre}</td><td>{o.estado}</td><td>{o.usuario_creador}</td><td>{o.picker_asignado || '-'}</td>
                   <td style={{ display: 'flex', gap: 6 }}>
