@@ -2,6 +2,7 @@ import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/theme.css';
 import { Layout, MenuItem } from './app/Layout';
+import { qzConnect, qzIsConnected, qzGetPrinters, qzPrintHtml } from './qz';
 
 const API = import.meta.env.VITE_API_BASE ?? '/api';
 const WS_URL = import.meta.env.VITE_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
@@ -223,6 +224,11 @@ function App() {
   const [bultoItems, setBultoItems] = useState<any[]>([]);
   const [ordenItemsCache, setOrdenItemsCache] = useState<Record<string, any[]>>({});
   const [bultoQtys, setBultoQtys] = useState<Record<string, string>>({});
+  const [qzStatus, setQzStatus] = useState<'desconectado'|'conectando'|'conectado'|'error'>('desconectado');
+  const [qzPrinters, setQzPrinters] = useState<string[]>([]);
+  const [qzPrinterEtiqueta, setQzPrinterEtiqueta] = useState<string>(() => localStorage.getItem('qz_printer_etiqueta') || '');
+  const [qzPrinterFactura, setQzPrinterFactura] = useState<string>(() => localStorage.getItem('qz_printer_factura') || '');
+  const [qzPanel, setQzPanel] = useState(false);
   const [productoInfoCard, setProductoInfoCard] = useState<any>(null);
   const [modalCantidadProducto, setModalCantidadProducto] = useState<any>(null);
   const [cantidadProductoSeleccionado, setCantidadProductoSeleccionado] = useState('1');
@@ -1032,9 +1038,7 @@ function App() {
     w.print();
   }
 
-  function imprimirEtiquetaBulto(etiqueta: any) {
-    const w = window.open('', '_blank', 'width=500,height=680');
-    if (!w) return;
+  function buildEtiquetaHtml(etiqueta: any): string {
     const irc_svg = `<svg xmlns="http://www.w3.org/2000/svg" width="110" height="80" viewBox="0 0 110 80">
       <g transform="translate(5,5)">
         <circle cx="32" cy="35" r="28" fill="none" stroke="#0a2d6e" stroke-width="6"/>
@@ -1044,12 +1048,12 @@ function App() {
       </g>
       <text x="78" y="46" text-anchor="middle" font-size="34" font-family="Arial" font-weight="900"><tspan fill="#0a2d6e">I</tspan><tspan fill="#b91c1c">R</tspan><tspan fill="#0a2d6e">C</tspan></text>
     </svg>`;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
       <title>Etiqueta Bulto ${etiqueta?.bulto ?? ''}</title>
       <style>
         @page { size: 4in 6in; margin: 8mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; color: #111; background: #fff; padding: 10px; border: 2px solid #ccc; border-radius: 12px; }
+        body { font-family: Arial, sans-serif; color: #111; background: #fff; padding: 10px; }
         .top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
         .company { font-size: 14px; font-weight: 900; text-align: center; margin-bottom: 6px; }
         .info-line { font-size: 13px; margin: 5px 0; }
@@ -1077,7 +1081,22 @@ function App() {
         <div style="font-size:16px;font-weight:700">BULTO:</div>
         <div class="bulto-num">${etiqueta?.bulto ?? '-'}</div>
       </div>
-    </body></html>`);
+    </body></html>`;
+  }
+
+  async function imprimirEtiquetaBulto(etiqueta: any) {
+    const html = buildEtiquetaHtml(etiqueta);
+    if (qzIsConnected() && qzPrinterEtiqueta) {
+      try {
+        await qzPrintHtml(qzPrinterEtiqueta, html);
+        return;
+      } catch (e: any) {
+        toast('error', `QZ etiqueta: ${e.message}. Imprimiendo en navegador...`);
+      }
+    }
+    const w = window.open('', '_blank', 'width=500,height=680');
+    if (!w) return;
+    w.document.write(html);
     w.document.close();
     w.focus();
     w.print();
@@ -1085,13 +1104,36 @@ function App() {
 
   async function imprimirFacturaOrdenFinal(orderId: string) {
     const data = await api<any>(`/orders/${orderId}/final-invoice`, token);
+    const html = data.preview_html || '<html><body><p>No hay vista previa.</p></body></html>';
+    if (qzIsConnected() && qzPrinterFactura) {
+      try {
+        await qzPrintHtml(qzPrinterFactura, html);
+        return;
+      } catch (e: any) {
+        toast('error', `QZ factura: ${e.message}. Imprimiendo en navegador...`);
+      }
+    }
     const w = window.open('', '_blank', 'width=1024,height=768');
     if (!w) return;
-    w.document.write(data.preview_html || '<html><body><p>No hay vista previa.</p></body></html>');
+    w.document.write(html);
     w.document.close();
     await esperarRecursosImpresion(w);
     w.focus();
     w.print();
+  }
+
+  async function conectarQZ() {
+    setQzStatus('conectando');
+    try {
+      await qzConnect();
+      const printers = await qzGetPrinters();
+      setQzPrinters(printers);
+      setQzStatus('conectado');
+      toast('ok', `QZ Tray conectado — ${printers.length} impresora(s) encontrada(s)`);
+    } catch (e: any) {
+      setQzStatus('error');
+      toast('error', `No se pudo conectar a QZ Tray: ${e.message}`);
+    }
   }
 
   async function enviarVenta() {
@@ -1369,8 +1411,67 @@ function App() {
     </div>
   );
 
+  const qzDot = { desconectado: '#94a3b8', conectando: '#f59e0b', conectado: '#22c55e', error: '#ef4444' }[qzStatus];
+  const qzLabel = { desconectado: 'QZ desconectado', conectando: 'Conectando...', conectado: 'QZ conectado', error: 'QZ error' }[qzStatus];
+
   return <>
-    <Layout usuario={usuario} moduloActivo={modulo} onCambiarModulo={cambiarModuloConRuta} onCerrarSesion={cerrarSesion} menu={menu} tituloModulo={menu.find((m) => m.key === modulo)?.label ?? 'POS'} esDashboard={modulo === 'admin-dashboard'} kpis={modulo === 'admin-dashboard' && usuario.rol === 'administrador' ? kpiCards : []} ocultarSidebar={usuario.rol === 'revendedor'}>
+    {/* ─── Panel flotante QZ ─── */}
+    {qzPanel && (
+      <div onClick={() => setQzPanel(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.2)', padding: 24, margin: '60px 16px 0', width: 340, maxWidth: '95vw' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, color: '#1e3a8a', margin: 0 }}>🖨️ Impresión QZ Tray</h3>
+            <button onClick={() => setQzPanel(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '8px 12px', background: '#f8fafc', borderRadius: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: qzDot, display: 'inline-block', flexShrink: 0 }}/>
+            <span style={{ fontSize: 13 }}>{qzLabel}</span>
+            {qzStatus !== 'conectado' && (
+              <button className="btn btn-primary" style={{ marginLeft: 'auto', padding: '5px 14px', fontSize: 12 }}
+                onClick={conectarQZ} disabled={qzStatus === 'conectando'}>
+                {qzStatus === 'conectando' ? 'Conectando...' : 'Conectar'}
+              </button>
+            )}
+          </div>
+
+          {qzStatus === 'conectado' && (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Impresora de etiquetas (4×6)</label>
+                <select value={qzPrinterEtiqueta} onChange={(e) => { setQzPrinterEtiqueta(e.target.value); localStorage.setItem('qz_printer_etiqueta', e.target.value); }} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}>
+                  <option value="">— Sin seleccionar —</option>
+                  {qzPrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Impresora de facturas (8½×11)</label>
+                <select value={qzPrinterFactura} onChange={(e) => { setQzPrinterFactura(e.target.value); localStorage.setItem('qz_printer_factura', e.target.value); }} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}>
+                  <option value="">— Sin seleccionar —</option>
+                  {qzPrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </>
+          )}
+
+          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <a href="/api/qz/cert/download" download style={{ textAlign: 'center', fontSize: 12, color: '#3b82f6', textDecoration: 'none', padding: '6px 0', border: '1px solid #bfdbfe', borderRadius: 6 }}>
+              ⬇ Descargar certificado (.crt)
+            </a>
+            <p style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', margin: 0 }}>
+              Instala el .crt en QZ Tray → Site Manager → Add una sola vez.
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <Layout usuario={usuario} moduloActivo={modulo} onCambiarModulo={cambiarModuloConRuta} onCerrarSesion={cerrarSesion} menu={menu} tituloModulo={menu.find((m) => m.key === modulo)?.label ?? 'POS'} esDashboard={modulo === 'admin-dashboard'} kpis={modulo === 'admin-dashboard' && usuario.rol === 'administrador' ? kpiCards : []} ocultarSidebar={usuario.rol === 'revendedor'}
+      topbarExtra={
+        <button onClick={() => setQzPanel(true)} title={qzLabel} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+          🖨️ <span style={{ width: 8, height: 8, borderRadius: '50%', background: qzDot, display: 'inline-block' }}/>
+        </button>
+      }>
 
       {modulo === 'pos' && <div className="panel-grid">
         <article className="panel-card span-8">

@@ -18,10 +18,11 @@ interface LayoutProps {
   bannerRed?: { tipo: 'ok' | 'warning'; texto: string } | null;
   kpis: Array<{ titulo: string; valor: string; subtitulo: string; tono: 'azul' | 'rojo' | 'verde' | 'gris' }>;
   ocultarSidebar?: boolean;
+  topbarExtra?: ReactNode;
   children: ReactNode;
 }
 
-export function Layout({ usuario, moduloActivo, onCambiarModulo, onCerrarSesion, menu, tituloModulo, esDashboard, bannerRed, kpis, ocultarSidebar, children }: LayoutProps) {
+export function Layout({ usuario, moduloActivo, onCambiarModulo, onCerrarSesion, menu, tituloModulo, esDashboard, bannerRed, kpis, ocultarSidebar, topbarExtra, children }: LayoutProps) {
   return (
     <div className={`layout-shell ${ocultarSidebar ? 'no-sidebar' : ''}`}>
       {!ocultarSidebar && <aside className="sidebar-premium">
@@ -70,6 +71,7 @@ export function Layout({ usuario, moduloActivo, onCambiarModulo, onCerrarSesion,
             {esDashboard && <p>{usuario.nombre} · {usuario.rol}</p>}
           </div>
           <div className="topbar-user-chip">
+            {topbarExtra}
             <span className="chip chip-user">{usuario.rol}</span>
             <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>{usuario.nombre}</span>
             <button className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }} onClick={onCerrarSesion}>⏻ Cerrar sesión</button>

@@ -25,6 +25,7 @@ import { ordersRouter } from './modulos/orders/routes.js';
 import { dgiiRouter } from './modulos/dgii/routes.js';
 import { eventosRouter } from './modulos/eventos/routes.js';
 import { startDgiiSyncJob } from './modulos/dgii/service.js';
+import { qzRouter } from './modulos/qz/routes.js';
 
 inicializarSeed();
 
@@ -53,6 +54,7 @@ app.use('/api/ncf', ncfRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/dgii', dgiiRouter);
 app.use('/api/eventos', eventosRouter);
+app.use('/api/qz', qzRouter);
 
 const server = http.createServer(app);
 iniciarHub(server);
