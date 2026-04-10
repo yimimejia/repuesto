@@ -2472,7 +2472,7 @@ function App() {
                   <span style={{ color: 'var(--muted)', fontSize: 13 }}>
                     {pickerItems.filter((i: any) => i.encontrado).length} de {pickerItems.length} items encontrados
                   </span>
-                  {(o.estado === 'buscada' || pickerItems.every((i: any) => i.encontrado)) && (
+                  {pickerItems.length > 0 && pickerItems.every((i: any) => i.encontrado) && (
                     <button className="btn btn-primary" style={{ padding: '6px 16px', fontSize: 13 }} onClick={async () => {
                       try {
                         await api(`/orders/${o.id}/completar-busqueda`, token, { method: 'POST' });
@@ -2486,17 +2486,6 @@ function App() {
                     </button>
                   )}
                 </div>
-              )}
-              {(o.estado === 'buscada' || o.estado === 'en_busqueda') && ordenSeleccionada?.id !== o.id && (
-                <button className="btn btn-primary" style={{ marginTop: 8, padding: '6px 16px', fontSize: 13 }} onClick={async () => {
-                  try {
-                    await api(`/orders/${o.id}/completar-busqueda`, token, { method: 'POST' });
-                    toast('ok', 'Orden marcada como completada');
-                    await cargarTodo();
-                  } catch (er: any) { toast('error', er.message); }
-                }}>
-                  ✓ Marcar búsqueda como completada
-                </button>
               )}
             </div>
           ))}
