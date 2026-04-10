@@ -38,7 +38,8 @@ const menuPorRol: Record<string, MenuItem[]> = {
   vendedor: [
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
     { key: 'cxc', label: 'Cobros Crédito', icono: '📒', acento: 'amarillo' },
-    { key: 'cuadrar', label: 'Cuadrar', icono: '⚖️', acento: 'amarillo' },
+    { key: 'ordenes', label: 'Órdenes / Pedidos', icono: '📦', acento: 'celeste' },
+    { key: 'pendiente-verificar', label: 'Pendiente verificar', icono: '✅', acento: 'verde' },
   ],
   cajero: [
     { key: 'pos', label: 'POS / Caja', icono: '🧾', acento: 'violeta' },
