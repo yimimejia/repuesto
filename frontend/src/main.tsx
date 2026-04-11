@@ -4095,13 +4095,25 @@ function App() {
             <p style={{ color: 'var(--muted)', margin: 0 }}>Reportes operativos del sistema</p>
           </div>
           <div className="reporte-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-            {Object.entries(reportes).map(([k, rows]) => (
-              <button key={k} className={`reporte-btn ${reporteActivo === k ? 'activo' : ''}`} onClick={() => setReporteActivo(reporteActivo === k ? '' : k)}>
-                <span className="reporte-icon">{REPORTE_ICONS[k] ?? '📊'}</span>
-                <strong>{REPORTE_LABELS[k] ?? k.replace(/-/g, ' ')}</strong>
-                <span className="reporte-count">{(rows as any[]).length} registros</span>
-              </button>
-            ))}
+            {Object.entries(reportes).map(([k, rows]) => {
+              if (k === 'base-606') {
+                return (
+                  <button key={k} className="reporte-btn" style={{ border: '2px solid #16a34a' }}
+                    onClick={() => { setModulo('tax606'); localStorage.setItem('pos_modulo', 'tax606'); }}>
+                    <span className="reporte-icon">🗂️</span>
+                    <strong>Formato 606 DGII</strong>
+                    <span className="reporte-count" style={{ color: '#16a34a' }}>→ Ir al módulo 606</span>
+                  </button>
+                );
+              }
+              return (
+                <button key={k} className={`reporte-btn ${reporteActivo === k ? 'activo' : ''}`} onClick={() => setReporteActivo(reporteActivo === k ? '' : k)}>
+                  <span className="reporte-icon">{REPORTE_ICONS[k] ?? '📊'}</span>
+                  <strong>{REPORTE_LABELS[k] ?? k.replace(/-/g, ' ')}</strong>
+                  <span className="reporte-count">{(rows as any[]).length} registros</span>
+                </button>
+              );
+            })}
           </div>
           {reporteActivo && reportes[reporteActivo] && (
             <div className="reporte-data">

@@ -119,10 +119,14 @@ reportesRouter.get('/existencia-minima', (_req, res) => {
   res.json(rows);
 });
 reportesRouter.get('/base-606', (_req, res) => {
-  const rows = db.prepare(`SELECT c.codigo_compra, c.numero_factura, c.numero_ncf, c.fecha_factura, c.total,
-      sp.rnc_cedula as suplidor_rnc, sp.nombre_comercial, c.itbis_total
-    FROM compras c JOIN suplidores sp ON sp.id=c.suplidor_id
-    WHERE c.estado='activa' ORDER BY c.fecha_factura DESC`).all();
+  const rows = db.prepare(`SELECT
+      r.periodo, r.numero_comprobante, r.rnc_cedula_suplidor, r.fecha_comprobante,
+      r.fecha_pago, r.monto_bienes, r.monto_servicios, r.total_monto_facturado,
+      r.itbis_facturado, r.itbis_retenido, r.monto_retencion_renta, r.forma_pago,
+      r.estado, r.tipo_bienes_servicios
+    FROM tax_606_records r
+    WHERE r.excluido=0 AND r.estado != 'anulado'
+    ORDER BY r.periodo DESC, r.fecha_comprobante DESC LIMIT 500`).all();
   res.json(rows);
 });
 
