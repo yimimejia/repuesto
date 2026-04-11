@@ -1,4 +1,4 @@
-export type Rol = 'vendedor' | 'cajero' | 'administrador' | 'al_por_mayor' | 'revendedor' | 'buscador';
+export type Rol = 'vendedor' | 'cajero' | 'administrador' | 'al_por_mayor' | 'revendedor' | 'buscador' | 'chofer';
 
 export type EstadoVenta =
   | 'borrador'

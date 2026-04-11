@@ -59,6 +59,9 @@ const menuPorRol: Record<string, MenuItem[]> = {
   buscador: [
     { key: 'ordenes', label: 'Órdenes asignadas', icono: '📦', acento: 'celeste' },
   ],
+  chofer: [
+    { key: 'chofer', label: 'Mis entregas', icono: '🚗', acento: 'celeste' },
+  ],
   administrador: [
     { key: 'admin-dashboard', label: 'Dashboard', icono: '📈', acento: 'azul' },
     { key: 'pos', label: 'POS Vendedor', icono: '🧾', acento: 'violeta' },
@@ -243,6 +246,8 @@ function App() {
   const [imagenEditFile, setImagenEditFile] = useState<File | null>(null);
   const [imagenAddPreview, setImagenAddPreview] = useState('');
   const [imagenEditPreview, setImagenEditPreview] = useState('');
+  const [choferes, setChoferes] = useState<any[]>([]);
+  const [choferSeleccionado, setChoferSeleccionado] = useState<Record<string, string>>({});
 
   const [modalCliente, setModalCliente] = useState(false);
   const [editandoCliente, setEditandoCliente] = useState<any>(null);
@@ -344,14 +349,16 @@ function App() {
       api<any>('/cxc/cuadre-dia', token).catch(() => ({ totales: {}, pagos: [] })),
     ]);
     setPendientes(pen); setCxc(cx); setKpis(kp); setHistorialVentas(historial); setAdminResumen(adminRes); setClientesFidelidad(cf); setNotasCredito(ncs); setCxcRiesgo(riesgoCxC); setCxcCuadreDia(cuadreDia);
-    const [ords, pks, ordRep] = await Promise.all([
+    const [ords, pks, ordRep, chofRes] = await Promise.all([
       api<any[]>('/orders', token).catch(() => []),
       (usuario.rol === 'cajero' || usuario.rol === 'administrador') ? api<any[]>('/usuarios/pickers', token).catch(() => []) : Promise.resolve([]),
       usuario.rol === 'administrador' ? api<any>('/orders/report', token).catch(() => ({ rows: [], promedios: {} })) : Promise.resolve({ rows: [], promedios: {} }),
+      (usuario.rol === 'cajero' || usuario.rol === 'administrador') ? api<any>('/orders/choferes', token).catch(() => ({ choferes: [] })) : Promise.resolve({ choferes: [] }),
     ]);
     setOrdenes(ords);
     setPickers(pks);
     setOrdenesReporte(ordRep);
+    setChoferes(chofRes.choferes ?? []);
     if (usuario.rol === 'administrador') {
       const [cm, us, rs, ij, im, cua, va, evs] = await Promise.all([api<any[]>('/compras', token).catch(() => []), api<any[]>('/usuarios', token).catch(() => []), api<any[]>('/usuarios/roles', token).catch(() => []), api<any[]>('/importador/jobs', token).catch(() => []), api<any>('/importador/meta', token).catch(() => null), api<any[]>('/cuadres', token).catch(() => []), api<any[]>('/ventas', token).catch(() => []), api<any[]>('/eventos', token).catch(() => [])]);
       setCompras(cm); setUsuarios(us); setRoles(rs); setImportJobs(ij); setImportMeta(im); setCuadres(cua); setVentasAll(va); setEventos(evs);
@@ -2670,11 +2677,13 @@ function App() {
           creada: 'chip-warning', en_busqueda: 'chip-warning', buscada: 'chip-soft',
           buscada_completa: 'chip-soft', en_verificacion: 'chip-primary', empacando: 'chip-primary',
           verificada: 'chip-verde', completada: 'chip-verde',
+          en_camino: 'chip-primary', entregado: 'chip-verde',
         };
         const estadoLabel: Record<string, string> = {
           creada: 'Creada', en_busqueda: 'En búsqueda', buscada: 'Buscada',
           buscada_completa: 'Búsqueda completa', en_verificacion: 'En verificación',
           empacando: 'Empacando', verificada: 'Verificada', completada: 'Completada',
+          en_camino: 'En camino', entregado: 'Entregado',
         };
         const avanzarEstado = async (o: any, nuevoEstado: string) => {
           try {
@@ -2737,16 +2746,51 @@ function App() {
                           <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#16a34a' }}
                             onClick={() => avanzarEstado(o, 'completada')}>✅ Completar</button>
                         )}
-                        <select defaultValue="" style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db' }}
-                          onChange={(e) => {
-                            if (!e.target.value) return;
-                            api(`/orders/${o.id}/asignar-picker`, token, { method: 'POST', body: JSON.stringify({ picker_usuario_id: e.target.value }) })
-                              .then(() => { toast('ok', 'Empleado asignado'); cargarTodo(); })
-                              .catch((er: any) => toast('error', er.message));
-                          }}>
-                          <option value="">👤 Asignar...</option>
-                          {pickers.map((p: any) => <option key={p.id} value={p.id}>{p.nombre_completo}{p.rol ? ` (${p.rol})` : ''}</option>)}
-                        </select>
+                        {o.estado === 'completada' && choferes.length > 0 && (
+                          <>
+                            <select value={choferSeleccionado[o.id] ?? ''} style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db' }}
+                              onChange={(e) => setChoferSeleccionado(prev => ({ ...prev, [o.id]: e.target.value }))}>
+                              <option value="">🚗 Elegir chofer...</option>
+                              {choferes.map((c: any) => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
+                            </select>
+                            {choferSeleccionado[o.id] && (
+                              <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#0284c7' }}
+                                onClick={async () => {
+                                  try {
+                                    await api(`/orders/${o.id}/enviar-chofer`, token, { method: 'POST', body: JSON.stringify({ chofer_id: choferSeleccionado[o.id] }) });
+                                    toast('ok', 'Orden enviada al chofer');
+                                    setChoferSeleccionado(prev => { const n = { ...prev }; delete n[o.id]; return n; });
+                                    await cargarTodo();
+                                  } catch (er: any) { toast('error', er.message); }
+                                }}>🚗 Enviar</button>
+                            )}
+                          </>
+                        )}
+                        {o.estado === 'en_camino' && (
+                          <>
+                            <span style={{ fontSize: 11, color: '#0284c7' }}>🚗 {o.chofer_nombre ?? '—'}</span>
+                            <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#16a34a' }}
+                              onClick={async () => {
+                                try {
+                                  await api(`/orders/${o.id}/entregado`, token, { method: 'POST' });
+                                  toast('ok', 'Entrega confirmada');
+                                  await cargarTodo();
+                                } catch (er: any) { toast('error', er.message); }
+                              }}>✅ Entregado</button>
+                          </>
+                        )}
+                        {!['completada','en_camino','entregado'].includes(o.estado) && (
+                          <select defaultValue="" style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db' }}
+                            onChange={(e) => {
+                              if (!e.target.value) return;
+                              api(`/orders/${o.id}/asignar-picker`, token, { method: 'POST', body: JSON.stringify({ picker_usuario_id: e.target.value }) })
+                                .then(() => { toast('ok', 'Empleado asignado'); cargarTodo(); })
+                                .catch((er: any) => toast('error', er.message));
+                            }}>
+                            <option value="">👤 Asignar...</option>
+                            {pickers.map((p: any) => <option key={p.id} value={p.id}>{p.nombre_completo}{p.rol ? ` (${p.rol})` : ''}</option>)}
+                          </select>
+                        )}
                       </>}
                       <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}
                         onClick={async () => {
@@ -4212,6 +4256,40 @@ function App() {
               ))}
             </tbody>
           </table>
+        </article>
+      )}
+      {modulo === 'chofer' && usuario.rol === 'chofer' && (
+        <article className="panel-card">
+          <h3 style={{ fontSize: 18, marginBottom: 14 }}>🚗 Mis entregas en camino</h3>
+          {ordenes.length === 0 ? (
+            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 24 }}>No tienes entregas asignadas actualmente.</p>
+          ) : (
+            <table className="tabla-base" style={{ width: '100%' }}>
+              <thead>
+                <tr><th>Orden</th><th>Cliente</th><th>Dirección</th><th>Teléfono</th><th>Acción</th></tr>
+              </thead>
+              <tbody>
+                {ordenes.map((o: any) => (
+                  <tr key={o.id}>
+                    <td><strong>{o.numero_orden}</strong></td>
+                    <td>{o.cliente_nombre}</td>
+                    <td style={{ fontSize: 12, color: 'var(--muted)' }}>{[o.direccion, o.ciudad].filter(Boolean).join(', ') || '—'}</td>
+                    <td style={{ fontSize: 12 }}>{o.telefono_1 || '—'}</td>
+                    <td>
+                      <button className="btn btn-primary" style={{ background: '#16a34a', padding: '5px 12px', fontSize: 13 }}
+                        onClick={async () => {
+                          try {
+                            await api(`/orders/${o.id}/entregado`, token, { method: 'POST' });
+                            toast('ok', '¡Entrega confirmada!');
+                            await cargarTodo();
+                          } catch (er: any) { toast('error', er.message); }
+                        }}>✅ Confirmar entrega</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </article>
       )}
     </Layout>

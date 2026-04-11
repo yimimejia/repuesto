@@ -8,25 +8,28 @@ const ordersRouter = Router();
 ordersRouter.use(auth);
 const now = () => new Date().toISOString();
 
-ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscador', 'vendedor'), (req, res) => {
+ordersRouter.get('/', permitir('cajero', 'administrador', 'revendedor', 'buscador', 'vendedor', 'chofer'), (req, res) => {
   const usuario = (req as any).usuario;
-  const base = `SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo,
+  const base = `SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo, c.direccion, c.ciudad, c.telefono_1,
     u.nombre_completo as usuario_creador,
     (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) as cantidad_items,
     (SELECT u2.nombre_completo FROM order_assignments oa JOIN usuarios u2 ON u2.id=oa.picker_usuario_id WHERE oa.order_id=o.id ORDER BY oa.fecha_creacion DESC LIMIT 1) as picker_asignado,
     (SELECT COUNT(*) FROM bundles b WHERE b.order_id=o.id) as total_bultos,
-    (SELECT GROUP_CONCAT(CAST(b2.numero_bulto AS TEXT), ', ') FROM bundles b2 WHERE b2.order_id=o.id ORDER BY b2.numero_bulto) as bultos_lista
+    (SELECT GROUP_CONCAT(CAST(b2.numero_bulto AS TEXT), ', ') FROM bundles b2 WHERE b2.order_id=o.id ORDER BY b2.numero_bulto) as bultos_lista,
+    (SELECT uc.nombre_completo FROM usuarios uc WHERE uc.id=o.chofer_id) as chofer_nombre
     FROM orders o
     JOIN clientes c ON c.id=o.cliente_id
     JOIN usuarios u ON u.id=o.usuario_creador_id`;
 
   const rows = usuario.rol === 'buscador'
-    ? db.prepare(base + ` WHERE o.estado NOT IN ('buscada_completa','en_verificacion','verificada','completada') AND EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id=o.id AND oa.picker_usuario_id=?) ORDER BY o.fecha_creacion DESC`).all(usuario.id)
+    ? db.prepare(base + ` WHERE o.estado NOT IN ('buscada_completa','en_verificacion','verificada','completada','en_camino','entregado') AND EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id=o.id AND oa.picker_usuario_id=?) ORDER BY o.fecha_creacion DESC`).all(usuario.id)
     : usuario.rol === 'vendedor'
-      ? db.prepare(base + ` WHERE o.usuario_creador_id=? AND o.estado NOT IN ('completada') ORDER BY o.fecha_creacion DESC`).all(usuario.id)
+      ? db.prepare(base + ` WHERE o.usuario_creador_id=? AND o.estado NOT IN ('completada','en_camino','entregado') ORDER BY o.fecha_creacion DESC`).all(usuario.id)
       : usuario.rol === 'revendedor'
         ? db.prepare(base + ' WHERE o.usuario_creador_id=? ORDER BY o.fecha_creacion DESC').all(usuario.id)
-        : db.prepare(base + ' ORDER BY o.fecha_creacion DESC').all();
+        : usuario.rol === 'chofer'
+          ? db.prepare(base + ` WHERE o.chofer_id=? AND o.estado IN ('en_camino') ORDER BY o.fecha_creacion DESC`).all(usuario.id)
+          : db.prepare(base + ' ORDER BY o.fecha_creacion DESC').all();
 
   res.json(rows);
 });
@@ -430,6 +433,37 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
 
   res.json({ preview_html: html, data: { orden: o, items, total_bultos: totalBultos },
   });
+});
+
+// GET choferes disponibles (para el cajero asignar)
+ordersRouter.get('/choferes', permitir('cajero', 'administrador'), (req, res) => {
+  const choferes = db.prepare(`SELECT u.id, u.nombre_completo FROM usuarios u JOIN roles r ON r.id=u.rol_id WHERE r.nombre='chofer' AND u.estado='activo' ORDER BY u.nombre_completo`).all();
+  res.json({ choferes });
+});
+
+// Enviar orden completada a un chofer
+ordersRouter.post('/:id/enviar-chofer', permitir('cajero', 'administrador'), (req, res) => {
+  const usuario = (req as any).usuario;
+  const { chofer_id } = req.body;
+  if (!chofer_id) return res.status(400).json({ error: 'chofer_id requerido' });
+  const orden = db.prepare('SELECT estado FROM orders WHERE id=?').get(req.params.id) as any;
+  if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
+  if (orden.estado !== 'completada') return res.status(400).json({ error: 'La orden debe estar completada para enviarla' });
+  db.prepare('UPDATE orders SET estado=?, chofer_id=?, fecha_actualizacion=? WHERE id=?').run('en_camino', chofer_id, now(), req.params.id);
+  registrarAuditoria('orders', String(req.params.id), 'enviar_chofer', `Orden enviada a chofer ${chofer_id}`, usuario.id);
+  res.json({ ok: true, estado: 'en_camino' });
+});
+
+// Chofer marca entrega completada
+ordersRouter.post('/:id/entregado', permitir('chofer', 'cajero', 'administrador'), (req, res) => {
+  const usuario = (req as any).usuario;
+  const orden = db.prepare('SELECT estado, chofer_id FROM orders WHERE id=?').get(req.params.id) as any;
+  if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
+  if (orden.estado !== 'en_camino') return res.status(400).json({ error: 'La orden no está en camino' });
+  if (usuario.rol === 'chofer' && orden.chofer_id !== usuario.id) return res.status(403).json({ error: 'No eres el chofer asignado' });
+  db.prepare('UPDATE orders SET estado=?, fecha_actualizacion=? WHERE id=?').run('entregado', now(), req.params.id);
+  registrarAuditoria('orders', String(req.params.id), 'entregado', 'Entrega confirmada por chofer', usuario.id);
+  res.json({ ok: true, estado: 'entregado' });
 });
 
 export { ordersRouter };
