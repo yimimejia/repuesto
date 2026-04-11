@@ -279,7 +279,7 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
     SELECT o.*, c.nombre as cliente_nombre, c.codigo as cliente_codigo, c.direccion, c.ciudad,
       c.cedula_rnc as cliente_rnc, c.telefono_1, c.porcentaje_descuento,
       u.nombre_completo as vendedor_nombre,
-      v.ncf, v.tipo_comprobante, v.fecha_vencimiento_ncf
+      v.ncf, v.tipo_comprobante
     FROM orders o
     JOIN clientes c ON c.id=o.cliente_id
     JOIN usuarios u ON u.id=o.usuario_creador_id
@@ -329,7 +329,8 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   }).join('');
 
   const fechaDoc = new Date().toLocaleDateString('es-DO');
-  const ncfVence = o.fecha_vencimiento_ncf ? new Date(o.fecha_vencimiento_ncf).toLocaleDateString('es-DO') : '-';
+  const fechaVenc = new Date(); fechaVenc.setFullYear(fechaVenc.getFullYear() + 1);
+  const ncfVence = o.ncf ? fechaVenc.toLocaleDateString('es-DO') : '-';
   const tipoComp = o.tipo_comprobante === 'credito_fiscal' ? 'CRÉDITO FISCAL' : o.tipo_comprobante === 'consumidor_final' ? 'CONSUMIDOR FINAL' : (o.tipo_comprobante ?? 'CRÉDITO FISCAL');
 
   const irc_svg = `<svg xmlns="http://www.w3.org/2000/svg" width="90" height="70" viewBox="0 0 90 70">
