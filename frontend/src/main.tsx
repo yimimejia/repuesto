@@ -2769,23 +2769,31 @@ function App() {
                           <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#16a34a' }}
                             onClick={() => avanzarEstado(o, 'completada')}>✅ Completar</button>
                         )}
-                        {o.estado === 'completada' && choferes.length > 0 && (
+                        {o.estado === 'completada' && (
                           <>
-                            <select value={choferSeleccionado[o.id] ?? ''} style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db' }}
-                              onChange={(e) => setChoferSeleccionado(prev => ({ ...prev, [o.id]: e.target.value }))}>
-                              <option value="">🚗 Elegir chofer...</option>
-                              {choferes.map((c: any) => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
-                            </select>
-                            {choferSeleccionado[o.id] && (
-                              <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#0284c7' }}
-                                onClick={async () => {
-                                  try {
-                                    await api(`/orders/${o.id}/enviar-chofer`, token, { method: 'POST', body: JSON.stringify({ chofer_id: choferSeleccionado[o.id] }) });
-                                    toast('ok', 'Orden enviada al chofer');
-                                    setChoferSeleccionado(prev => { const n = { ...prev }; delete n[o.id]; return n; });
-                                    await cargarTodo();
-                                  } catch (er: any) { toast('error', er.message); }
-                                }}>🚗 Enviar</button>
+                            <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}
+                              onClick={() => imprimirFacturaOrdenFinal(o.id).catch((e: any) => toast('error', e.message))}>
+                              🖨️ Factura
+                            </button>
+                            {choferes.length > 0 && (
+                              <>
+                                <select value={choferSeleccionado[o.id] ?? ''} style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #d1d5db' }}
+                                  onChange={(e) => setChoferSeleccionado(prev => ({ ...prev, [o.id]: e.target.value }))}>
+                                  <option value="">🚗 Elegir chofer...</option>
+                                  {choferes.map((c: any) => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
+                                </select>
+                                {choferSeleccionado[o.id] && (
+                                  <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12, background: '#0284c7' }}
+                                    onClick={async () => {
+                                      try {
+                                        await api(`/orders/${o.id}/enviar-chofer`, token, { method: 'POST', body: JSON.stringify({ chofer_id: choferSeleccionado[o.id] }) });
+                                        toast('ok', 'Orden enviada al chofer');
+                                        setChoferSeleccionado(prev => { const n = { ...prev }; delete n[o.id]; return n; });
+                                        await cargarTodo();
+                                      } catch (er: any) { toast('error', er.message); }
+                                    }}>🚗 Enviar</button>
+                                )}
+                              </>
                             )}
                           </>
                         )}
