@@ -988,50 +988,50 @@ function App() {
     const total = Number(venta?.total ?? 0);
 
     // SVG inline para evitar descarga de red en QZ Tray
-    const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 1200 600">
-      <ellipse cx="600" cy="300" rx="580" ry="270" fill="#102f8c" stroke="#ef2f2f" stroke-width="18"/>
-      <circle cx="600" cy="120" r="70" fill="#fff"/>
-      <text x="600" y="145" text-anchor="middle" font-size="78" font-family="Arial" font-weight="800" fill="#ef2f2f">RC</text>
-      <text x="600" y="300" text-anchor="middle" font-size="118" font-family="Georgia" font-weight="700" fill="#fff">REPUESTOS</text>
-      <text x="600" y="420" text-anchor="middle" font-size="130" font-family="Arial" font-weight="900" fill="#f8f8f8">CALCAÑO</text>
+    const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="110" viewBox="0 0 1200 600">
+      <ellipse cx="600" cy="300" rx="580" ry="270" fill="#0a1f7a" stroke="#cc0000" stroke-width="28"/>
+      <circle cx="600" cy="120" r="75" fill="#ffffff"/>
+      <text x="600" y="148" text-anchor="middle" font-size="82" font-family="Arial" font-weight="900" fill="#cc0000">RC</text>
+      <text x="600" y="305" text-anchor="middle" font-size="122" font-family="Georgia" font-weight="900" fill="#ffffff">REPUESTOS</text>
+      <text x="600" y="425" text-anchor="middle" font-size="135" font-family="Arial" font-weight="900" fill="#ffffff">CALCAÑO</text>
     </svg>`;
 
     const htmlFactura = `<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Factura ${venta?.numero_interno || ''}</title>
       <style>
         @page { size: 80mm auto; margin: 0; }
-        * { font-family: Arial, sans-serif; font-weight: 700; color: #000; box-sizing: border-box; }
+        * { font-family: Arial, sans-serif; font-weight: 900; color: #000; box-sizing: border-box; }
         html, body { width: 72mm; margin: 0; padding: 0; }
-        body { padding: 2mm; font-size: 11px; }
+        body { padding: 2mm; font-size: 12px; }
         .center { text-align: center; }
-        .line { border-top: 1px dashed #000; margin: 5px 0; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        td { padding: 2px 1px; text-align: left; }
+        .line { border-top: 2px solid #000; margin: 5px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        td { padding: 3px 1px; text-align: left; font-weight: 900; }
         .right { text-align: right; }
-        .tot td { border-top: 1px solid #000; padding: 3px 1px; }
-        .tot .total-row td { font-size: 15px; border-top: 2px solid #000; padding-top: 4px; }
+        .tot td { border-top: 1px solid #000; padding: 3px 1px; font-weight: 900; }
+        .tot .total-row td { font-size: 16px; border-top: 3px solid #000; padding-top: 5px; font-weight: 900; }
       </style>
     </head><body>
       <div class="center">${logoSvg}</div>
-      <div class="center" style="font-size:10px; margin-top:2px;">IMPORTADORA REPUESTOS CALCAÑO</div>
+      <div class="center" style="font-size:12px; font-weight:900; margin-top:3px;">IMPORTADORA REPUESTOS CALCAÑO</div>
       <div class="line"></div>
-      <div style="font-size:10px;">FACTURA#: ${venta?.numero_interno || ''} | ${metodoPago.toUpperCase()}</div>
-      <div style="font-size:10px;">NCF: ${venta?.ncf || '-'}</div>
-      <div style="font-size:10px;">TRANSACCIÓN: ${String(venta?.tipo_comprobante || 'consumidor_final').replaceAll('_',' ').toUpperCase()}</div>
-      <div style="font-size:10px;">FECHA: ${fechaImp.toLocaleDateString('es-DO')} ${fechaImp.toLocaleTimeString('es-DO')}</div>
-      <div style="font-size:10px;">VÁLIDA HASTA: ${fechaVal.toLocaleDateString('es-DO')}</div>
+      <div style="font-size:12px; font-weight:900;">FACTURA#: ${venta?.numero_interno || ''} | ${metodoPago.toUpperCase()}</div>
+      <div style="font-size:12px; font-weight:900;">NCF: ${venta?.ncf || '-'}</div>
+      <div style="font-size:12px; font-weight:900;">TRANSACCIÓN: ${String(venta?.tipo_comprobante || 'consumidor_final').replaceAll('_',' ').toUpperCase()}</div>
+      <div style="font-size:12px; font-weight:900;">FECHA: ${fechaImp.toLocaleDateString('es-DO')} ${fechaImp.toLocaleTimeString('es-DO')}</div>
+      <div style="font-size:12px; font-weight:900;">VÁLIDA HASTA: ${fechaVal.toLocaleDateString('es-DO')}</div>
       <div class="line"></div>
-      <div style="font-size:10px;">CLIENTE: ${clienteNombre}</div>
-      <div style="font-size:10px;">RNC: ${clienteRnc || '-'}</div>
+      <div style="font-size:12px; font-weight:900;">CLIENTE: ${clienteNombre}</div>
+      <div style="font-size:12px; font-weight:900;">RNC: ${clienteRnc || '-'}</div>
       <div class="line"></div>
       <table>
-        <thead><tr><td style="font-size:10px;font-weight:900;">DESCRIPCIÓN</td><td class="right" style="font-size:10px;font-weight:900;white-space:nowrap;">CANT×P.UNIT</td><td class="right" style="font-size:10px;font-weight:900;">TOTAL</td></tr></thead>
+        <thead><tr><td style="font-size:12px;font-weight:900;">DESCRIPCIÓN</td><td class="right" style="font-size:12px;font-weight:900;white-space:nowrap;">CANT×P.UNIT</td><td class="right" style="font-size:12px;font-weight:900;">TOTAL</td></tr></thead>
         <tbody>
           ${detalle.map((d: any) => {
             const cantidad = Number(d.cantidad || 0);
             const totalLinea = Number(d.subtotal_linea || 0);
             const itbisLinea = Number(d.itbis_monto || 0);
             const totalConItbis = totalLinea + itbisLinea;
-            return `<tr style="border-top:1px solid #ccc;"><td style="font-size:10px;padding-top:3px;">${d.descripcion}</td><td class="right" style="white-space:nowrap;font-size:10px;">${cantidad.toFixed(0)}×${money(Number(d.precio_unitario))}</td><td class="right" style="font-size:10px;">${money(totalConItbis)}</td></tr>`;
+            return `<tr style="border-top:1px solid #000;"><td style="font-size:12px;font-weight:900;padding-top:3px;">${d.descripcion}</td><td class="right" style="white-space:nowrap;font-size:12px;font-weight:900;">${cantidad.toFixed(0)}×${money(Number(d.precio_unitario))}</td><td class="right" style="font-size:12px;font-weight:900;">${money(totalConItbis)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -1045,8 +1045,8 @@ function App() {
         <tr><td>DEVUELTA</td><td class="right">${money(Number(devuelta))}</td></tr>
       </table>
       <div class="line"></div>
-      <div class="center" style="font-size:11px;">*** GRACIAS POR SU COMPRA ***</div>
-      ${Number(puntosCliente) > 0 ? `<div class="center" style="font-size:10px;">PUNTOS ACUMULADOS: ${Number(puntosCliente).toLocaleString('es-DO')}</div>` : ''}
+      <div class="center" style="font-size:13px; font-weight:900;">*** GRACIAS POR SU COMPRA ***</div>
+      ${Number(puntosCliente) > 0 ? `<div class="center" style="font-size:12px;font-weight:900;">PUNTOS ACUMULADOS: ${Number(puntosCliente).toLocaleString('es-DO')}</div>` : ''}
       <div style="height:10mm;"></div>
     </body></html>`;
 
