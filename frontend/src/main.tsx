@@ -4251,4 +4251,12 @@ function App() {
   </>;
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+const rootContainer = document.getElementById('root')!;
+const existingRoot = (rootContainer as any).__reactRoot;
+if (existingRoot) {
+  existingRoot.render(<React.StrictMode><App /></React.StrictMode>);
+} else {
+  const newRoot = createRoot(rootContainer);
+  (rootContainer as any).__reactRoot = newRoot;
+  newRoot.render(<React.StrictMode><App /></React.StrictMode>);
+}
