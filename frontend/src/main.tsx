@@ -987,68 +987,74 @@ function App() {
     const itbis = Number(venta?.itbis_total ?? 0);
     const total = Number(venta?.total ?? 0);
 
+    // SVG inline para evitar descarga de red en QZ Tray
+    const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 1200 600">
+      <ellipse cx="600" cy="300" rx="580" ry="270" fill="#102f8c" stroke="#ef2f2f" stroke-width="18"/>
+      <circle cx="600" cy="120" r="70" fill="#fff"/>
+      <text x="600" y="145" text-anchor="middle" font-size="78" font-family="Arial" font-weight="800" fill="#ef2f2f">RC</text>
+      <text x="600" y="300" text-anchor="middle" font-size="118" font-family="Georgia" font-weight="700" fill="#fff">REPUESTOS</text>
+      <text x="600" y="420" text-anchor="middle" font-size="130" font-family="Arial" font-weight="900" fill="#f8f8f8">CALCAÑO</text>
+    </svg>`;
+
     const htmlFactura = `<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Factura ${venta?.numero_interno || ''}</title>
       <style>
-        @page { size: 80mm auto; margin: 2mm; }
-        * { font-family: Arial, sans-serif; font-weight: 700; color: #000; }
-        html, body { width: 76mm; margin: 0; padding: 0; }
-        body { margin: 2mm; font-size: 12px; }
+        @page { size: 80mm auto; margin: 0; }
+        * { font-family: Arial, sans-serif; font-weight: 700; color: #000; box-sizing: border-box; }
+        html, body { width: 72mm; margin: 0; padding: 0; }
+        body { padding: 2mm; font-size: 11px; }
         .center { text-align: center; }
-        .line { border-top: 1px solid #000; margin: 6px 0; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { padding: 3px 2px; text-align: left; border-bottom: 1px solid #000; }
+        .line { border-top: 1px dashed #000; margin: 5px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        td { padding: 2px 1px; text-align: left; }
         .right { text-align: right; }
-        .tot td { border-bottom: none; }
+        .tot td { border-top: 1px solid #000; padding: 3px 1px; }
+        .tot .total-row td { font-size: 15px; border-top: 2px solid #000; padding-top: 4px; }
       </style>
     </head><body>
-      <div class="center">
-        <img src="${window.location.origin}/logo-repuestos-calcano.svg" alt="logo" style="height:88px; width:auto; display:block; margin:0 auto;" />
-        <div>IMPORTADORA REPUESTOS CALCAÑO</div>
-      </div>
+      <div class="center">${logoSvg}</div>
+      <div class="center" style="font-size:10px; margin-top:2px;">IMPORTADORA REPUESTOS CALCAÑO</div>
       <div class="line"></div>
-      <div>FACTURA#: ${venta?.numero_interno || ''} (${metodoPago.toUpperCase()})</div>
-      <div>NCF: ${venta?.ncf || '-'}</div>
-      <div>TIPO TRANSACCIÓN: ${String(venta?.tipo_comprobante || 'consumidor_final').replaceAll('_',' ').toUpperCase()}</div>
-      <div>DESDE: ${fechaImp.toLocaleDateString('es-DO')} ${fechaImp.toLocaleTimeString('es-DO')}</div>
-      <div>HASTA: ${fechaVal.toLocaleDateString('es-DO')}</div>
+      <div style="font-size:10px;">FACTURA#: ${venta?.numero_interno || ''} | ${metodoPago.toUpperCase()}</div>
+      <div style="font-size:10px;">NCF: ${venta?.ncf || '-'}</div>
+      <div style="font-size:10px;">TRANSACCIÓN: ${String(venta?.tipo_comprobante || 'consumidor_final').replaceAll('_',' ').toUpperCase()}</div>
+      <div style="font-size:10px;">FECHA: ${fechaImp.toLocaleDateString('es-DO')} ${fechaImp.toLocaleTimeString('es-DO')}</div>
+      <div style="font-size:10px;">VÁLIDA HASTA: ${fechaVal.toLocaleDateString('es-DO')}</div>
       <div class="line"></div>
-      <div>CLIENTE:</div>
-      <div>${clienteNombre}</div>
-      <div>RNC: ${clienteRnc || '-'}</div>
+      <div style="font-size:10px;">CLIENTE: ${clienteNombre}</div>
+      <div style="font-size:10px;">RNC: ${clienteRnc || '-'}</div>
       <div class="line"></div>
       <table>
-        <thead><tr><th>Cantidad</th><th>Precio</th><th>ITBIS</th><th>Neto unid.</th><th class="right">Total</th></tr></thead>
+        <thead><tr><td style="font-size:10px;font-weight:900;">DESCRIPCIÓN</td><td class="right" style="font-size:10px;font-weight:900;white-space:nowrap;">CANT×P.UNIT</td><td class="right" style="font-size:10px;font-weight:900;">TOTAL</td></tr></thead>
         <tbody>
           ${detalle.map((d: any) => {
             const cantidad = Number(d.cantidad || 0);
             const totalLinea = Number(d.subtotal_linea || 0);
             const itbisLinea = Number(d.itbis_monto || 0);
             const totalConItbis = totalLinea + itbisLinea;
-            const netoUnitario = cantidad > 0 ? (totalConItbis / cantidad) : 0;
-            return `<tr><td colspan="5">${d.descripcion}</td></tr><tr><td>${cantidad.toFixed(0)}</td><td>${money(Number(d.precio_unitario))}</td><td>${money(itbisLinea)}</td><td>${money(netoUnitario)}</td><td class="right">${money(totalConItbis)}</td></tr>`;
+            return `<tr style="border-top:1px solid #ccc;"><td style="font-size:10px;padding-top:3px;">${d.descripcion}</td><td class="right" style="white-space:nowrap;font-size:10px;">${cantidad.toFixed(0)}×${money(Number(d.precio_unitario))}</td><td class="right" style="font-size:10px;">${money(totalConItbis)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
       <div class="line"></div>
       <table class="tot">
         <tr><td>SUB TOTAL</td><td class="right">${money(subtotal)}</td></tr>
-        <tr><td>DESCUENTO</td><td class="right">${money(descuento)}</td></tr>
-        <tr><td>RECARGO</td><td class="right">0.00</td></tr>
-        <tr><td>ITBIS</td><td class="right">${money(itbis)}</td></tr>
-        <tr><td style="font-size:18px;">TOTAL</td><td class="right" style="font-size:22px;">${money(total)}</td></tr>
+        ${descuento > 0 ? `<tr><td>DESCUENTO</td><td class="right">-${money(descuento)}</td></tr>` : ''}
+        <tr><td>ITBIS (18%)</td><td class="right">${money(itbis)}</td></tr>
+        <tr class="total-row"><td>TOTAL</td><td class="right">${money(total)}</td></tr>
         <tr><td>PAGO</td><td class="right">${money(Number(pagoCliente))}</td></tr>
         <tr><td>DEVUELTA</td><td class="right">${money(Number(devuelta))}</td></tr>
       </table>
       <div class="line"></div>
-      <div class="center">GRACIAS POR SU COMPRA</div>
-      ${Number(puntosCliente) > 0 ? `<div class="center">PUNTOS ACUMULADOS: ${Number(puntosCliente).toLocaleString('es-DO')}</div>` : ''}
+      <div class="center" style="font-size:11px;">*** GRACIAS POR SU COMPRA ***</div>
+      ${Number(puntosCliente) > 0 ? `<div class="center" style="font-size:10px;">PUNTOS ACUMULADOS: ${Number(puntosCliente).toLocaleString('es-DO')}</div>` : ''}
+      <div style="height:10mm;"></div>
     </body></html>`;
 
     // Intentar imprimir por QZ Tray primero
     if (qzIsConnected() && qzPrinterFactura) {
       try {
         if (preopened) preopened.close();
-        await qzPrintHtml(qzPrinterFactura, htmlFactura);
+        await qzPrintHtml(qzPrinterFactura, htmlFactura, { paperWidth: 80 });
         return;
       } catch (e) {
         console.warn('QZ print falló, usando ventana:', e);
@@ -1115,7 +1121,7 @@ function App() {
     const html = buildEtiquetaHtml(etiqueta);
     if (qzIsConnected() && qzPrinterEtiqueta) {
       try {
-        await qzPrintHtml(qzPrinterEtiqueta, html);
+        await qzPrintHtml(qzPrinterEtiqueta, html, { paperWidth: 101.6, paperHeight: 152.4 });
         return;
       } catch (e: any) {
         toast('error', `QZ etiqueta: ${e.message}. Imprimiendo en navegador...`);
@@ -1134,7 +1140,7 @@ function App() {
     const html = data.preview_html || '<html><body><p>No hay vista previa.</p></body></html>';
     if (qzIsConnected() && qzPrinterFactura) {
       try {
-        await qzPrintHtml(qzPrinterFactura, html);
+        await qzPrintHtml(qzPrinterFactura, html, { paperWidth: 80 });
         return;
       } catch (e: any) {
         toast('error', `QZ factura: ${e.message}. Imprimiendo en navegador...`);

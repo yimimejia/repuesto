@@ -62,13 +62,17 @@ export async function qzGetPrinters(): Promise<string[]> {
   return (await getQz().printers.find()) as string[];
 }
 
-export async function qzPrintHtml(printerName: string, html: string, options?: { size?: string }): Promise<void> {
-  await qzConnect();
+export async function qzPrintHtml(printerName: string, html: string, options?: { paperWidth?: number; paperHeight?: number | null }): Promise<void> {
   const q = getQz();
+  if (!q || !_connected || !q.websocket.isActive()) await qzConnect();
+  const paperWidth = options?.paperWidth ?? 80;
+  const paperHeight = options?.paperHeight ?? null;
   const cfg = q.configs.create(printerName, {
-    margins: 0,
     colorType: 'blackwhite',
-    scaleContent: true,
+    scaleContent: false,
+    size: { width: paperWidth, height: paperHeight },
+    units: 'mm',
+    margins: { top: 0, right: 0, bottom: 0, left: 0 },
   });
   await q.print(cfg, [{ type: 'html', format: 'plain', data: html }]);
 }
