@@ -484,6 +484,160 @@ function asegurarMigraciones() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_dgii_rnc_rnc ON dgii_rnc(rnc)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_dgii_rnc_razon ON dgii_rnc(razon_social)');
 
+  // ── Módulo tributario 606 ────────────────────────────────────────────────
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_configuration (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    rnc_contribuyente TEXT NOT NULL DEFAULT '',
+    nombre_comercial TEXT NOT NULL DEFAULT '',
+    emisor_electronico INTEGER NOT NULL DEFAULT 0,
+    incluir_serie_b INTEGER NOT NULL DEFAULT 1,
+    incluir_ecf_recibidos INTEGER NOT NULL DEFAULT 0,
+    reglas_especiales_json TEXT NOT NULL DEFAULT '{}',
+    version_plantilla TEXT NOT NULL DEFAULT '2024',
+    fecha_actualizacion TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  // Asegurar fila única de configuración
+  db.exec(`INSERT OR IGNORE INTO tax_configuration(id) VALUES(1)`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_606_catalogs (
+    id TEXT PRIMARY KEY,
+    tipo TEXT NOT NULL,
+    codigo TEXT NOT NULL,
+    descripcion TEXT NOT NULL,
+    activo INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(tipo, codigo)
+  )`);
+
+  // Catálogos base
+  const insertCatalog = db.prepare(`INSERT OR IGNORE INTO tax_606_catalogs(id,tipo,codigo,descripcion) VALUES(lower(hex(randomblob(8))),?,?,?)`);
+  const catalogs: [string,string,string][] = [
+    ['tipo_identificacion','1','RNC (Registro Nacional del Contribuyente)'],
+    ['tipo_identificacion','2','Cédula de Identidad y Electoral'],
+    ['tipo_identificacion','3','Pasaporte'],
+    ['tipo_identificacion','4','Número de Identificación en el Exterior'],
+    ['tipo_bienes_servicios','1','Gastos de Personal'],
+    ['tipo_bienes_servicios','2','Gastos por Trabajo, Suministros y Servicios'],
+    ['tipo_bienes_servicios','3','Arrendamientos'],
+    ['tipo_bienes_servicios','4','Gastos de Activos Fijos'],
+    ['tipo_bienes_servicios','5','Representación y Gastos de Viaje'],
+    ['tipo_bienes_servicios','6','Gastos Deducibles (Otros)'],
+    ['tipo_bienes_servicios','7','Compra de Materias Primas'],
+    ['tipo_bienes_servicios','8','Adquisición de Otros Bienes'],
+    ['tipo_bienes_servicios','9','Adquisición de Activos'],
+    ['tipo_bienes_servicios','10','Gastos no Deducibles'],
+    ['tipo_bienes_servicios','11','Importaciones'],
+    ['tipo_retencion_isr','1','Alquileres (10%)'],
+    ['tipo_retencion_isr','2','Honorarios por Servicios (10%)'],
+    ['tipo_retencion_isr','3','Otras Rentas (10%)'],
+    ['tipo_retencion_isr','4','Otras Rentas (Personas Jurídicas) (27%)'],
+    ['tipo_retencion_isr','5','Intereses Pagados a Personas Jurídicas Residentes (10%)'],
+    ['tipo_retencion_isr','6','Intereses Pagados a Personas Físicas Residentes (10%)'],
+    ['tipo_retencion_isr','7','Retención por Proveedores del Estado (5%)'],
+    ['tipo_retencion_isr','8','Juegos Telefónicos (10%)'],
+    ['forma_pago','1','Efectivo'],
+    ['forma_pago','2','Cheques / Transferencias / Depósitos'],
+    ['forma_pago','3','Tarjeta de Débito / Crédito'],
+    ['forma_pago','4','A Crédito'],
+    ['forma_pago','5','Permuta'],
+    ['forma_pago','6','Nota de Crédito'],
+    ['forma_pago','7','Mixto'],
+    ['tipo_comprobante','B01','Factura de Crédito Fiscal'],
+    ['tipo_comprobante','B02','Factura por Consumo'],
+    ['tipo_comprobante','B03','Nota de Débito'],
+    ['tipo_comprobante','B04','Nota de Crédito'],
+    ['tipo_comprobante','B11','Comprobante de Compras'],
+    ['tipo_comprobante','B13','Gastos Menores'],
+    ['tipo_comprobante','B14','Regímenes Especiales de Tributación'],
+    ['tipo_comprobante','B15','Gubernamental'],
+    ['tipo_comprobante','B16','Para Exportaciones'],
+    ['tipo_comprobante','B17','Para Pagos al Exterior'],
+    ['tipo_comprobante','E31','e-CF Factura de Crédito Fiscal Electrónica'],
+    ['tipo_comprobante','E32','e-CF Factura para Consumidor Final Electrónica'],
+    ['tipo_comprobante','E33','e-CF Nota de Débito Electrónica'],
+    ['tipo_comprobante','E34','e-CF Nota de Crédito Electrónica'],
+    ['tipo_comprobante','E41','e-CF Comprobante de Compras Electrónico'],
+    ['tipo_comprobante','E43','e-CF Gastos Menores Electrónico'],
+    ['tipo_comprobante','E44','e-CF Regímenes Especiales de Tributación Electrónico'],
+    ['tipo_comprobante','E45','e-CF Gubernamental Electrónico'],
+    ['tipo_comprobante','E47','e-CF para Pagos al Exterior Electrónico'],
+  ];
+  for (const [tipo, codigo, descripcion] of catalogs) {
+    insertCatalog.run(tipo, codigo, descripcion);
+  }
+
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_606_records (
+    id TEXT PRIMARY KEY,
+    periodo TEXT NOT NULL,
+    rnc_cedula_suplidor TEXT NOT NULL,
+    tipo_identificacion TEXT NOT NULL,
+    tipo_bienes_servicios TEXT,
+    numero_comprobante TEXT NOT NULL,
+    numero_comprobante_modificado TEXT,
+    fecha_comprobante TEXT NOT NULL,
+    fecha_pago TEXT,
+    monto_bienes REAL NOT NULL DEFAULT 0,
+    monto_servicios REAL NOT NULL DEFAULT 0,
+    total_monto_facturado REAL NOT NULL DEFAULT 0,
+    itbis_facturado REAL NOT NULL DEFAULT 0,
+    itbis_retenido REAL NOT NULL DEFAULT 0,
+    itbis_proporcionalidad REAL NOT NULL DEFAULT 0,
+    itbis_costo REAL NOT NULL DEFAULT 0,
+    itbis_por_adelantar REAL NOT NULL DEFAULT 0,
+    itbis_percibido REAL NOT NULL DEFAULT 0,
+    tipo_retencion_isr TEXT,
+    monto_retencion_renta REAL NOT NULL DEFAULT 0,
+    isr_percibido REAL NOT NULL DEFAULT 0,
+    impuesto_selectivo REAL NOT NULL DEFAULT 0,
+    otros_impuestos REAL NOT NULL DEFAULT 0,
+    monto_propina_legal REAL NOT NULL DEFAULT 0,
+    forma_pago TEXT NOT NULL DEFAULT '1',
+    estado TEXT NOT NULL DEFAULT 'borrador',
+    excluido INTEGER NOT NULL DEFAULT 0,
+    excluido_justificacion TEXT,
+    observaciones TEXT,
+    errores_json TEXT,
+    creado_por_id TEXT,
+    actualizado_por_id TEXT,
+    fecha_creacion TEXT NOT NULL,
+    fecha_actualizacion TEXT NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_606_periodo ON tax_606_records(periodo)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_606_rnc ON tax_606_records(rnc_cedula_suplidor)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_606_ncf ON tax_606_records(numero_comprobante)');
+
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_606_periods (
+    periodo TEXT PRIMARY KEY,
+    estado TEXT NOT NULL DEFAULT 'abierto',
+    cerrado_por_id TEXT,
+    fecha_cierre TEXT,
+    reabierto_por_id TEXT,
+    fecha_reapertura TEXT,
+    fecha_creacion TEXT NOT NULL
+  )`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_606_exports (
+    id TEXT PRIMARY KEY,
+    periodo TEXT NOT NULL,
+    nombre_archivo TEXT NOT NULL,
+    contenido_txt TEXT NOT NULL,
+    hash_archivo TEXT NOT NULL,
+    cantidad_registros INTEGER NOT NULL DEFAULT 0,
+    total_facturado REAL NOT NULL DEFAULT 0,
+    total_itbis REAL NOT NULL DEFAULT 0,
+    exportado_por_id TEXT,
+    fecha_creacion TEXT NOT NULL
+  )`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_606_audit_logs (
+    id TEXT PRIMARY KEY,
+    record_id TEXT NOT NULL,
+    campo TEXT NOT NULL,
+    valor_anterior TEXT,
+    valor_nuevo TEXT,
+    usuario_id TEXT,
+    fecha_creacion TEXT NOT NULL
+  )`);
+
   const now = new Date().toISOString();
 
   const defaultSucursal = db.prepare('SELECT id FROM sucursales LIMIT 1').get() as { id: string } | undefined;

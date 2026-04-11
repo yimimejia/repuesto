@@ -26,6 +26,7 @@ import { dgiiRouter } from './modulos/dgii/routes.js';
 import { eventosRouter } from './modulos/eventos/routes.js';
 import { startDgiiSyncJob } from './modulos/dgii/service.js';
 import { qzRouter } from './modulos/qz/routes.js';
+import { tax606Router } from './modulos/tax606/routes.js';
 
 inicializarSeed();
 
@@ -55,6 +56,7 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/dgii', dgiiRouter);
 app.use('/api/eventos', eventosRouter);
 app.use('/api/qz', qzRouter);
+app.use('/api/tax606', tax606Router);
 
 const server = http.createServer(app);
 iniciarHub(server);

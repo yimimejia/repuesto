@@ -83,6 +83,7 @@ const menuPorRol: Record<string, MenuItem[]> = {
     { key: 'reportes', label: 'Reportes', icono: '📊', acento: 'azul' },
     { key: 'contabilidad', label: 'Contabilidad', icono: '🏦', acento: 'verde' },
     { key: 'eventos', label: 'Eventos', icono: '🔔', acento: 'rojo' },
+    { key: 'tax606', label: 'Formato 606 DGII', icono: '🗂️', acento: 'verde' },
   ],
 };
 
@@ -280,6 +281,20 @@ function App() {
   const [modalConfigReporte, setModalConfigReporte] = useState<'historial-ventas' | 'devoluciones' | ''>('');
   const [modalAplicarNC, setModalAplicarNC] = useState(false);
   const [eventos, setEventos] = useState<any[]>([]);
+  const [tax606Periodo, setTax606Periodo] = useState(() => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [tax606Records, setTax606Records] = useState<any[]>([]);
+  const [tax606Total, setTax606Total] = useState(0);
+  const [tax606Page, setTax606Page] = useState(1);
+  const [tax606Pages, setTax606Pages] = useState(1);
+  const [tax606Stats, setTax606Stats] = useState<any>(null);
+  const [tax606Periods, setTax606Periods] = useState<any[]>([]);
+  const [tax606Catalogs, setTax606Catalogs] = useState<any>({});
+  const [tax606Config, setTax606Config] = useState<any>(null);
+  const [tax606View, setTax606View] = useState<'dashboard'|'records'|'nuevo'|'config'>('dashboard');
+  const [tax606Form, setTax606Form] = useState<any>({});
+  const [tax606EditId, setTax606EditId] = useState<string|null>(null);
+  const [tax606Filtros, setTax606Filtros] = useState<any>({ suplidor: '', ncf: '', estado: '', con_errores: '' });
+  const [tax606Loading, setTax606Loading] = useState(false);
   const [codigoNC, setCodigoNC] = useState('');
   const [ncEncontrada, setNcEncontrada] = useState<any>(null);
   const [modalNcDiferencia, setModalNcDiferencia] = useState<any>(null);
@@ -1150,7 +1165,7 @@ function App() {
     const printerCarta = qzPrinterCarta || qzPrinterFactura;
     if (qzIsConnected() && printerCarta) {
       try {
-        await qzPrintHtml(printerCarta, html, { paperWidth: 215.9, paperHeight: 279.4 });
+        await qzPrintHtml(printerCarta, html, { paperWidth: 215.9, paperHeight: 279.4, color: true, scaleContent: true });
         return;
       } catch (e: any) {
         toast('error', `QZ carta: ${e.message}. Imprimiendo en navegador...`);
@@ -1341,6 +1356,92 @@ function App() {
     setToken('');
     setUsuario(null);
     setModulo('pos');
+  }
+
+  useEffect(() => {
+    if (!token || modulo !== 'tax606') return;
+    (async () => {
+      const [cats, cfg, periods] = await Promise.all([
+        api<any>('/tax606/catalogs', token).catch(() => ({})),
+        api<any>('/tax606/config', token).catch(() => null),
+        api<any>('/tax606/periods', token).catch(() => ({ periods: [] })),
+      ]);
+      setTax606Catalogs(cats);
+      setTax606Config(cfg);
+      setTax606Periods(periods.periods ?? []);
+    })();
+  }, [token, modulo]);
+
+  async function cargar606Records() {
+    const p = new URLSearchParams({ periodo: tax606Periodo, page: String(tax606Page), ...tax606Filtros });
+    Object.keys(tax606Filtros).forEach((k) => { if (!tax606Filtros[k]) p.delete(k); });
+    const r = await api<any>(`/tax606/records?${p}`, token);
+    setTax606Records(r.records ?? []);
+    setTax606Total(r.total ?? 0);
+    setTax606Pages(r.pages ?? 1);
+    const stats = await api<any>(`/tax606/dashboard/${tax606Periodo}`, token).catch(() => null);
+    setTax606Stats(stats);
+  }
+
+  useEffect(() => {
+    if (!token || modulo !== 'tax606') return;
+    cargar606Records().catch(() => {});
+  }, [token, modulo, tax606Periodo, tax606Page, tax606Filtros]);
+
+  async function guardar606() {
+    setTax606Loading(true);
+    try {
+      const body = { ...tax606Form, periodo: tax606Periodo };
+      if (tax606EditId) {
+        await api(`/tax606/records/${tax606EditId}`, token, { method: 'PUT', body: JSON.stringify(body) });
+        toast('ok', 'Registro actualizado');
+      } else {
+        await api(`/tax606/records`, token, { method: 'POST', body: JSON.stringify(body) });
+        toast('ok', 'Registro guardado');
+      }
+      setTax606View('records');
+      setTax606Form({});
+      setTax606EditId(null);
+      await cargar606Records();
+    } catch (e: any) { toast('error', e.message); }
+    setTax606Loading(false);
+  }
+
+  async function validar606Periodo() {
+    setTax606Loading(true);
+    try {
+      const r = await api<any>(`/tax606/validate/${tax606Periodo}`, token, { method: 'POST' });
+      toast(r.ok ? 'ok' : 'warn', `${r.total} registros: ${r.con_errores} con errores`);
+      await cargar606Records();
+    } catch (e: any) { toast('error', e.message); }
+    setTax606Loading(false);
+  }
+
+  async function exportar606TXT() {
+    setTax606Loading(true);
+    try {
+      const res = await fetch(`${API}/tax606/export/${tax606Periodo}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      const blob = await res.blob();
+      const cd = res.headers.get('content-disposition') ?? '';
+      const fname = cd.match(/filename="([^"]+)"/)?.[1] ?? `606_${tax606Periodo}.txt`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+      toast('ok', 'TXT exportado correctamente');
+      await cargar606Records();
+    } catch (e: any) { toast('error', e.message); }
+    setTax606Loading(false);
+  }
+
+  async function guardar606Config() {
+    try {
+      await api('/tax606/config', token, { method: 'PUT', body: JSON.stringify(tax606Config) });
+      toast('ok', 'Configuración guardada');
+    } catch (e: any) { toast('error', e.message); }
   }
 
   if (!usuario) return <Login onSuccess={(t, u) => {
@@ -4300,6 +4401,240 @@ function App() {
               ))}
             </tbody>
           </table>
+        </article>
+      )}
+      {modulo === 'tax606' && usuario.rol === 'administrador' && (
+        <article className="panel-card">
+          <div className="panel-head" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <h3>🗂️ Formato 606 DGII — Compras</h3>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 12 }}>Período:</label>
+              <input type="month" style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                value={tax606Periodo ? `${tax606Periodo.slice(0,4)}-${tax606Periodo.slice(4,6)}` : ''}
+                onChange={(e) => { const v = e.target.value.replace('-',''); setTax606Periodo(v); setTax606Page(1); }} />
+              <button className={`btn ${tax606View==='dashboard'?'btn-primary':'btn-ghost'}`} style={{ fontSize: 12 }} onClick={() => setTax606View('dashboard')}>📊 Resumen</button>
+              <button className={`btn ${tax606View==='records'?'btn-primary':'btn-ghost'}`} style={{ fontSize: 12 }} onClick={() => setTax606View('records')}>📋 Registros</button>
+              <button className={`btn ${tax606View==='config'?'btn-primary':'btn-ghost'}`} style={{ fontSize: 12 }} onClick={() => setTax606View('config')}>⚙️ Config</button>
+            </div>
+          </div>
+
+          {tax606View === 'dashboard' && tax606Stats && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: 'Total registros', valor: tax606Stats.stats?.total ?? 0, color: '#0284c7' },
+                  { label: 'Activos', valor: tax606Stats.stats?.activos ?? 0, color: '#16a34a' },
+                  { label: 'Validados', valor: tax606Stats.stats?.validados ?? 0, color: '#7c3aed' },
+                  { label: 'Con errores', valor: tax606Stats.stats?.con_errores ?? 0, color: '#dc2626' },
+                  { label: 'Total Facturado', valor: `RD$ ${Number(tax606Stats.stats?.total_facturado ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`, color: '#374151' },
+                  { label: 'ITBIS Total', valor: `RD$ ${Number(tax606Stats.stats?.total_itbis ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`, color: '#f59e0b' },
+                  { label: 'ITBIS Retenido', valor: `RD$ ${Number(tax606Stats.stats?.total_itbis_retenido ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`, color: '#dc2626' },
+                  { label: 'Retención ISR', valor: `RD$ ${Number(tax606Stats.stats?.total_isr ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`, color: '#dc2626' },
+                ].map((k) => (
+                  <div key={k.label} style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{k.label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: k.color }}>{k.valor}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: '#64748b' }}>Estado período: </span>
+                <span className={`chip ${tax606Stats.estado_periodo === 'cerrado' ? 'chip-rojo' : 'chip-verde'}`}>{tax606Stats.estado_periodo === 'cerrado' ? '🔒 Cerrado' : '🔓 Abierto'}</span>
+                {tax606Stats.estado_periodo === 'cerrado'
+                  ? <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await api(`/tax606/periods/${tax606Periodo}/open`, token, { method: 'POST' }); setTax606Stats((s: any) => s ? { ...s, estado_periodo: 'abierto' } : s); toast('ok', 'Período reabierto'); }}>🔓 Reabrir</button>
+                  : <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await api(`/tax606/periods/${tax606Periodo}/close`, token, { method: 'POST' }); setTax606Stats((s: any) => s ? { ...s, estado_periodo: 'cerrado' } : s); toast('ok', 'Período cerrado'); }}>🔒 Cerrar período</button>
+                }
+                <button className="btn btn-primary" style={{ fontSize: 12, background: '#7c3aed' }} disabled={tax606Loading}
+                  onClick={validar606Periodo}>✅ Validar período</button>
+                <button className="btn btn-primary" style={{ fontSize: 12, background: '#16a34a' }} disabled={tax606Loading}
+                  onClick={exportar606TXT}>⬇️ Exportar TXT</button>
+                <button className="btn btn-primary" style={{ fontSize: 12 }}
+                  onClick={() => { setTax606Form({ forma_pago: '1', tipo_identificacion: '1', monto_bienes: 0, monto_servicios: 0, itbis_facturado: 0 }); setTax606EditId(null); setTax606View('nuevo'); }}>➕ Nuevo registro</button>
+              </div>
+            </div>
+          )}
+
+          {tax606View === 'records' && (
+            <div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <input placeholder="RNC/Cédula suplidor..." style={{ flex: 1, minWidth: 140, padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                  value={tax606Filtros.suplidor} onChange={(e) => setTax606Filtros((f: any) => ({ ...f, suplidor: e.target.value }))} />
+                <input placeholder="NCF..." style={{ flex: 1, minWidth: 120, padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                  value={tax606Filtros.ncf} onChange={(e) => setTax606Filtros((f: any) => ({ ...f, ncf: e.target.value }))} />
+                <select style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                  value={tax606Filtros.estado} onChange={(e) => setTax606Filtros((f: any) => ({ ...f, estado: e.target.value }))}>
+                  <option value="">Todos los estados</option>
+                  <option value="borrador">Borrador</option>
+                  <option value="validado">Validado</option>
+                  <option value="exportado">Exportado</option>
+                  <option value="anulado">Anulado</option>
+                </select>
+                <select style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                  value={tax606Filtros.con_errores} onChange={(e) => setTax606Filtros((f: any) => ({ ...f, con_errores: e.target.value }))}>
+                  <option value="">Todos</option>
+                  <option value="1">Solo con errores</option>
+                </select>
+                <button className="btn btn-primary" style={{ fontSize: 12 }}
+                  onClick={() => { setTax606Form({ forma_pago: '1', tipo_identificacion: '1', monto_bienes: 0, monto_servicios: 0, itbis_facturado: 0 }); setTax606EditId(null); setTax606View('nuevo'); }}>➕ Nuevo</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="table-premium" style={{ fontSize: 12 }}>
+                  <thead><tr>
+                    <th>NCF</th><th>Suplidor RNC</th><th>Fecha</th><th>Bienes</th><th>Servicios</th><th>Total</th><th>ITBIS</th><th>F.Pago</th><th>Estado</th><th>Acción</th>
+                  </tr></thead>
+                  <tbody>
+                    {tax606Records.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: '#94a3b8', padding: 24 }}>Sin registros para este período</td></tr>}
+                    {tax606Records.map((r: any) => {
+                      const errs = r.errores_json ? JSON.parse(r.errores_json) : [];
+                      const estadoColor: Record<string, string> = { borrador: '#f59e0b', validado: '#16a34a', exportado: '#0284c7', anulado: '#dc2626', rectificado: '#7c3aed' };
+                      return <tr key={r.id} style={{ opacity: r.excluido ? 0.5 : 1 }}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.numero_comprobante}</td>
+                        <td>{r.rnc_cedula_suplidor}</td>
+                        <td>{r.fecha_comprobante}</td>
+                        <td style={{ textAlign: 'right' }}>{Number(r.monto_bienes).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ textAlign: 'right' }}>{Number(r.monto_servicios).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{Number(r.total_monto_facturado).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ textAlign: 'right' }}>{Number(r.itbis_facturado).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ textAlign: 'center' }}>{(tax606Catalogs.forma_pago ?? []).find((c: any) => c.codigo === r.forma_pago)?.descripcion?.split('/')[0] ?? r.forma_pago}</td>
+                        <td>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: estadoColor[r.estado] ?? '#374151' }}>{r.estado}</span>
+                          {errs.length > 0 && <span title={errs.join('\n')} style={{ marginLeft: 4, color: '#dc2626', cursor: 'help' }}>⚠️</span>}
+                          {r.excluido ? <span style={{ marginLeft: 4, fontSize: 10, color: '#94a3b8' }}>excluido</span> : null}
+                        </td>
+                        <td>
+                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }}
+                            onClick={() => { setTax606Form(r); setTax606EditId(r.id); setTax606View('nuevo'); }}>✏️</button>
+                          {r.estado !== 'anulado' && (
+                            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px', color: '#dc2626' }}
+                              onClick={async () => { await api(`/tax606/records/${r.id}/estado`, token, { method: 'PATCH', body: JSON.stringify({ estado: 'anulado' }) }); await cargar606Records(); }}>🗑️</button>
+                          )}
+                        </td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {tax606Pages > 1 && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'center' }}>
+                  {Array.from({ length: tax606Pages }, (_, i) => i + 1).map((p) => (
+                    <button key={p} className={`btn ${p === tax606Page ? 'btn-primary' : 'btn-ghost'}`} style={{ fontSize: 12, padding: '4px 10px' }}
+                      onClick={() => setTax606Page(p)}>{p}</button>
+                  ))}
+                </div>
+              )}
+              <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>{tax606Total} registros totales</p>
+            </div>
+          )}
+
+          {tax606View === 'nuevo' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h4>{tax606EditId ? 'Editar registro' : 'Nuevo registro 606'} — Período {tax606Periodo}</h4>
+                <button className="btn btn-ghost" onClick={() => { setTax606View('records'); setTax606Form({}); setTax606EditId(null); }}>← Volver</button>
+              </div>
+              <div className="quick-form" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+                {[
+                  ['RNC / Cédula del Suplidor *','rnc_cedula_suplidor','text'],
+                  ['NCF (Número Comprobante) *','numero_comprobante','text'],
+                  ['NCF Modificado (si aplica)','numero_comprobante_modificado','text'],
+                  ['Fecha Comprobante *','fecha_comprobante','date'],
+                  ['Fecha de Pago','fecha_pago','date'],
+                  ['Monto en Bienes (RD$)','monto_bienes','number'],
+                  ['Monto en Servicios (RD$)','monto_servicios','number'],
+                  ['ITBIS Facturado','itbis_facturado','number'],
+                  ['ITBIS Retenido','itbis_retenido','number'],
+                  ['ITBIS Proporcionalidad','itbis_proporcionalidad','number'],
+                  ['ITBIS Costo','itbis_costo','number'],
+                  ['ITBIS Percibido','itbis_percibido','number'],
+                  ['Monto Retención Renta','monto_retencion_renta','number'],
+                  ['ISR Percibido','isr_percibido','number'],
+                  ['Impuesto Selectivo','impuesto_selectivo','number'],
+                  ['Otros Impuestos','otros_impuestos','number'],
+                  ['Monto Propina Legal','monto_propina_legal','number'],
+                ].map(([label, key, type]) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 12 }}>{label}</label>
+                    <input type={type as any} style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                      value={tax606Form[key] ?? (type === 'number' ? 0 : '')}
+                      onChange={(e) => setTax606Form((f: any) => ({ ...f, [key]: type === 'number' ? Number(e.target.value) : e.target.value }))} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ fontSize: 12 }}>Tipo Identificación *</label>
+                  <select style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                    value={tax606Form.tipo_identificacion ?? '1'} onChange={(e) => setTax606Form((f: any) => ({ ...f, tipo_identificacion: e.target.value }))}>
+                    {(tax606Catalogs.tipo_identificacion ?? []).map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} - {c.descripcion}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12 }}>Tipo Bienes/Servicios</label>
+                  <select style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                    value={tax606Form.tipo_bienes_servicios ?? ''} onChange={(e) => setTax606Form((f: any) => ({ ...f, tipo_bienes_servicios: e.target.value }))}>
+                    <option value="">— Seleccionar —</option>
+                    {(tax606Catalogs.tipo_bienes_servicios ?? []).map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} - {c.descripcion}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12 }}>Tipo Retención ISR</label>
+                  <select style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                    value={tax606Form.tipo_retencion_isr ?? ''} onChange={(e) => setTax606Form((f: any) => ({ ...f, tipo_retencion_isr: e.target.value || null }))}>
+                    <option value="">— No aplica —</option>
+                    {(tax606Catalogs.tipo_retencion_isr ?? []).map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} - {c.descripcion}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12 }}>Forma de Pago *</label>
+                  <select style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+                    value={tax606Form.forma_pago ?? '1'} onChange={(e) => setTax606Form((f: any) => ({ ...f, forma_pago: e.target.value }))}>
+                    {(tax606Catalogs.forma_pago ?? []).map((c: any) => <option key={c.codigo} value={c.codigo}>{c.codigo} - {c.descripcion}</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1/-1' }}>
+                  <label style={{ fontSize: 12 }}>Observaciones</label>
+                  <textarea style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13, resize: 'vertical', minHeight: 60 }}
+                    value={tax606Form.observaciones ?? ''} onChange={(e) => setTax606Form((f: any) => ({ ...f, observaciones: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0f9ff', borderRadius: 8, fontSize: 12, color: '#0284c7' }}>
+                Total facturado calculado: <strong>RD$ {((tax606Form.monto_bienes || 0) + (tax606Form.monto_servicios || 0)).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>
+                {' '} · ITBIS por adelantar: <strong>RD$ {Math.max(0,(tax606Form.itbis_facturado||0)-(tax606Form.itbis_retenido||0)-(tax606Form.itbis_proporcionalidad||0)-(tax606Form.itbis_costo||0)).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="btn btn-primary" disabled={tax606Loading} onClick={guardar606}>{tax606Loading ? 'Guardando...' : tax606EditId ? '💾 Actualizar' : '💾 Guardar'}</button>
+                <button className="btn btn-ghost" onClick={() => { setTax606View('records'); setTax606Form({}); setTax606EditId(null); }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {tax606View === 'config' && tax606Config && (
+            <div>
+              <h4 style={{ marginBottom: 12 }}>Configuración Tributaria</h4>
+              <div className="quick-form" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <div><label>RNC del Contribuyente</label><input value={tax606Config.rnc_contribuyente ?? ''} onChange={(e) => setTax606Config((c: any) => ({ ...c, rnc_contribuyente: e.target.value }))} /></div>
+                <div><label>Nombre Comercial</label><input value={tax606Config.nombre_comercial ?? ''} onChange={(e) => setTax606Config((c: any) => ({ ...c, nombre_comercial: e.target.value }))} /></div>
+                <div><label>Versión Plantilla DGII</label><input value={tax606Config.version_plantilla ?? '2024'} onChange={(e) => setTax606Config((c: any) => ({ ...c, version_plantilla: e.target.value }))} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                    <input type="checkbox" checked={!!tax606Config.emisor_electronico} onChange={(e) => setTax606Config((c: any) => ({ ...c, emisor_electronico: e.target.checked ? 1 : 0 }))} />
+                    Somos emisor electrónico (e-CF)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                    <input type="checkbox" checked={!!tax606Config.incluir_serie_b} onChange={(e) => setTax606Config((c: any) => ({ ...c, incluir_serie_b: e.target.checked ? 1 : 0 }))} />
+                    Incluir comprobantes serie B
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                    <input type="checkbox" checked={!!tax606Config.incluir_ecf_recibidos} onChange={(e) => setTax606Config((c: any) => ({ ...c, incluir_ecf_recibidos: e.target.checked ? 1 : 0 }))} />
+                    Incluir e-CF recibidos en el 606
+                  </label>
+                </div>
+              </div>
+              <div style={{ marginTop: 12, padding: '10px 14px', background: '#fff7ed', borderRadius: 8, fontSize: 12, color: '#92400e', lineHeight: 1.6 }}>
+                <strong>Nota:</strong> La configuración de emisor electrónico afecta qué tipos de comprobantes se incluyen en la exportación. 
+                Los comprobantes E41, E43 y E47 tienen reglas especiales según las normas DGII vigentes.
+              </div>
+              <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={guardar606Config}>💾 Guardar configuración</button>
+            </div>
+          )}
         </article>
       )}
       {modulo === 'chofer' && usuario.rol === 'chofer' && (

@@ -25,6 +25,7 @@ Sistema de punto de venta (POS) local-first para Repuestos Calcaño. Opera en re
 11. **Importar SQL** — importador de base legada SQL Server
 12. **Reportes** — botones por tipo de reporte con vista de datos
 13. **Contabilidad** — historial de cuadres de caja con estado Inconsistente/Normal
+14. **Formato 606 DGII** — módulo tributario completo: registros de compras fiscales, validación, exportación TXT oficial DGII, gestión de períodos (abrir/cerrar), catálogos parametrizables (tipo identificación, bienes/servicios, retención ISR, forma de pago, tipo comprobante), configuración tributaria (RNC, emisor electrónico, reglas serie B/E), historial de exportaciones, auditoría de cambios. API: `/api/tax606/*`
 
 ## Sucursales automáticas
 

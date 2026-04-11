@@ -1,0 +1,188 @@
+Implementa en el sistema un módulo tributario para la DGII de República Dominicana enfocado en la generación y control del Formato 606 (Compras de Bienes y Servicios), siguiendo la plantilla e instructivo oficial vigente de la DGII y dejando toda la lógica preparada para cambios futuros por facturación electrónica.
+
+OBJETIVO
+Crear un módulo que:
+1. registre todas las compras y gastos fiscalmente reportables,
+2. valide la información conforme a las reglas del 606,
+3. genere la exportación TXT compatible con la DGII,
+4. permita revisión, rectificación y re-exportación por período,
+5. sea parametrizable para adaptarse a cambios normativos sin reescribir el sistema.
+
+ALCANCE FUNCIONAL
+1. Crear una tabla o entidad principal llamada compras_fiscales_606.
+2. Crear catálogos parametrizables para:
+   - tipo_identificacion
+   - tipo_bienes_servicios_comprados
+   - tipo_retencion_isr
+   - forma_pago
+   - tipo_comprobante_reportable
+3. Crear configuración tributaria editable desde panel admin para:
+   - RNC del contribuyente que reporta
+   - nombre comercial
+   - si la empresa es emisor electrónico o no
+   - política de inclusión de comprobantes serie B
+   - política de inclusión de comprobantes serie E recibidos
+   - reglas especiales para E41, E43, E47
+   - período fiscal abierto/cerrado
+   - versión de plantilla DGII usada
+
+CAMPOS OBLIGATORIOS POR REGISTRO
+Guardar al menos:
+- período AAAAMM
+- RNC o cédula del suplidor
+- tipo de identificación
+- tipo de bienes/servicios comprados
+- NCF
+- NCF o documento modificado
+- fecha comprobante
+- fecha pago
+- monto facturado en servicios
+- monto facturado en bienes
+- total monto facturado
+- ITBIS facturado
+- ITBIS retenido
+- ITBIS sujeto a proporcionalidad
+- ITBIS llevado al costo
+- ITBIS por adelantar
+- ITBIS percibido en compras
+- tipo de retención ISR
+- monto retención renta
+- ISR percibido en compras
+- impuesto selectivo al consumo
+- otros impuestos/tasas
+- monto propina legal
+- forma de pago
+- estado del registro (borrador, validado, exportado, rectificado, anulado)
+- observaciones y errores de validación
+
+REGLAS DE NEGOCIO
+1. El módulo debe trabajar por período fiscal mensual.
+2. Debe permitir cerrar período para evitar modificaciones accidentales.
+3. Debe poder reabrirse solo por administrador.
+4. Debe validar formatos de fechas y estructura de NCF.
+5. Debe soportar NCF tradicionales y e-CF recibidos según configuración tributaria.
+6. NO asumir que toda serie E queda fuera del 606. Dejar reglas por tipo de comprobante configurables.
+7. Debe contemplar que E47 puede requerir control conjunto con 609, pero la retención no debe duplicarse incorrectamente dentro del 606.
+8. Si hay ITBIS retenido o retención ISR, exigir fecha de pago.
+9. total_monto_facturado debe calcularse automáticamente = bienes + servicios.
+10. itbis_por_adelantar debe calcularse automáticamente según la lógica oficial vigente.
+11. Guardar historial de cambios por auditoría: usuario, fecha, valor anterior, valor nuevo.
+12. Permitir marcar registros como excluidos del 606 con justificación y trazabilidad.
+13. Soportar hasta grandes volúmenes por período y paginación eficiente.
+
+VALIDACIONES
+1. No permitir exportar si falta un campo obligatorio.
+2. No permitir NCF duplicado dentro del mismo período para el mismo suplidor, salvo reglas válidas de notas de crédito/débito.
+3. Validar consistencia entre:
+   - fecha comprobante
+   - fecha pago
+   - montos
+   - impuestos
+   - forma de pago
+   - retenciones
+4. Mostrar errores legibles al usuario y también códigos internos para depuración.
+5. Crear un modo “pre-validación interna” antes de exportar el TXT.
+6. Preparar integración futura para comparar contra respuesta o criterio de la DGII sin acoplar el sistema a una sola plantilla estática.
+
+IMPORTACIÓN DE DATOS
+1. Permitir crear registros manualmente.
+2. Permitir importación por Excel/CSV de compras.
+3. Permitir mapear columnas importadas a los campos oficiales del 606.
+4. Detectar y señalar duplicados, faltantes y valores sospechosos.
+5. Permitir integración futura con cuentas por pagar, compras, caja y bancos del sistema.
+
+EXPORTACIÓN
+1. Generar archivo TXT del 606 por período.
+2. El nombre del archivo debe seguir el patrón oficial configurable.
+3. La exportación debe incluir encabezado y detalle según estructura vigente.
+4. Guardar copia del TXT generado, hash del archivo y fecha de generación.
+5. Permitir descargar también una vista previa en pantalla y un Excel auxiliar de revisión.
+
+PANTALLAS
+1. Dashboard tributario con:
+   - período actual
+   - cantidad de registros
+   - errores
+   - monto total
+   - ITBIS total
+   - retenciones totales
+   - estado del período
+2. Pantalla de listado con filtros por:
+   - período
+   - suplidor
+   - NCF
+   - estado
+   - tipo de comprobante
+   - errores
+3. Formulario manual de registro/edición.
+4. Pantalla de importación masiva.
+5. Pantalla de validación y vista previa antes de exportar.
+6. Pantalla de historial y auditoría.
+7. Pantalla de configuración tributaria.
+
+ARQUITECTURA
+1. Separar:
+   - modelos
+   - servicios tributarios
+   - validadores
+   - exportadores
+   - controladores/endpoints
+   - UI
+2. Crear servicio central 606Service con métodos:
+   - createRecord
+   - updateRecord
+   - validateRecord
+   - validatePeriod
+   - closePeriod
+   - reopenPeriod
+   - exportTXT
+   - previewTXT
+   - importExcel
+   - getAuditLog
+3. Crear validadores desacoplados y testeables.
+4. No hardcodear catálogos tributarios en el frontend: servirlos desde backend/configuración.
+
+API SUGERIDA
+- GET /tax/606/periods
+- POST /tax/606/periods/:period/close
+- POST /tax/606/periods/:period/reopen
+- GET /tax/606/records
+- POST /tax/606/records
+- PUT /tax/606/records/:id
+- POST /tax/606/import
+- POST /tax/606/validate/:period
+- GET /tax/606/preview/:period
+- POST /tax/606/export/:period
+- GET /tax/606/audit
+- GET /tax/config
+- PUT /tax/config
+
+BASE DE DATOS
+Crear migraciones para:
+- tax_606_records
+- tax_606_catalogs
+- tax_606_exports
+- tax_606_audit_logs
+- tax_configuration
+
+UX
+1. Toda la interfaz en español.
+2. Mostrar advertencias claras, no mensajes técnicos crudos.
+3. Colocar indicadores visuales: borrador, validado, exportado, error.
+4. Permitir corregir y revalidar sin perder trazabilidad.
+5. Preparar diseño responsivo.
+
+TESTING
+1. Tests unitarios para validaciones tributarias.
+2. Tests de exportación TXT.
+3. Tests de duplicidad.
+4. Tests de cierres y reaperturas de período.
+5. Tests con comprobantes serie B y serie E recibidos.
+6. Tests para escenarios de emisor electrónico y no electrónico.
+
+IMPORTANTE
+- Basarse en la plantilla e instructivo oficial vigente del Formato 606 de la DGII, no en supuestos.
+- Dejar la lógica preparada para cambios futuros por facturación electrónica.
+- No eliminar el 606 ni asumir que desapareció.
+- Dejar una capa de configuración normativa para actualizar reglas sin romper datos históricos.
+- Documentar en un README técnico cómo se llena, valida, exporta y qué reglas quedan parametrizadas.
