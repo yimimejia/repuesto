@@ -2994,7 +2994,6 @@ function App() {
                           const r = await api<any>(`/orders/${ordenDelBulto.id}/bundles/${bundleActual!.id}/cerrar`, token, { method: 'POST' });
                           toast('ok', `Bulto #${bundleActual!.numero_bulto} cerrado`);
                           if (r?.etiqueta) imprimirEtiquetaBulto(r.etiqueta);
-                          setTimeout(() => imprimirFacturaOrdenFinal(ordenDelBulto.id).catch((e: any) => toast('error', e.message)), 800);
                           if (r?.siguiente_bulto) {
                             setBundleActual({ orderId: ordenDelBulto.id, ...r.siguiente_bulto });
                             setBultoItems([]);

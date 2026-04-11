@@ -367,7 +367,7 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
   <title>Factura ${o.numero_orden}</title>
   <style>
-    @page { size: 8.5in 11in; margin: 0.4in 0.5in; }
+    @page { size: 8.5in 11in portrait; margin: 0.4in 0.5in; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 10px; color: #111; }
     .header { display: grid; grid-template-columns: 110px 1fr 1fr; gap: 6px; margin-bottom: 6px; }
