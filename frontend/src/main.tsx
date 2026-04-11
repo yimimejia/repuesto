@@ -987,9 +987,7 @@ function App() {
     const itbis = Number(venta?.itbis_total ?? 0);
     const total = Number(venta?.total ?? 0);
 
-    const w = preopened ?? window.open('', '_blank', 'width=420,height=900');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Factura ${venta?.numero_interno || ''}</title>
+    const htmlFactura = `<!DOCTYPE html><html><head><meta charset="UTF-8" /><title>Factura ${venta?.numero_interno || ''}</title>
       <style>
         @page { size: 80mm auto; margin: 2mm; }
         * { font-family: Arial, sans-serif; font-weight: 700; color: #000; }
@@ -1044,7 +1042,23 @@ function App() {
       <div class="line"></div>
       <div class="center">GRACIAS POR SU COMPRA</div>
       ${Number(puntosCliente) > 0 ? `<div class="center">PUNTOS ACUMULADOS: ${Number(puntosCliente).toLocaleString('es-DO')}</div>` : ''}
-    </body></html>`);
+    </body></html>`;
+
+    // Intentar imprimir por QZ Tray primero
+    if (qzIsConnected() && qzPrinterFactura) {
+      try {
+        if (preopened) preopened.close();
+        await qzPrintHtml(qzPrinterFactura, htmlFactura);
+        return;
+      } catch (e) {
+        console.warn('QZ print falló, usando ventana:', e);
+      }
+    }
+
+    // Fallback: ventana del navegador
+    const w = preopened ?? window.open('', '_blank', 'width=420,height=900');
+    if (!w) return;
+    w.document.write(htmlFactura);
     w.document.close();
     await esperarRecursosImpresion(w);
     w.focus();
@@ -2277,7 +2291,7 @@ function App() {
                     return;
                   }
                   try {
-                    const printWin = window.open('', '_blank', 'width=420,height=900');
+                    const printWin = (qzIsConnected() && qzPrinterFactura) ? null : window.open('', '_blank', 'width=420,height=900');
                     await api(`/ventas/${cajaCobrarModal.id}/cobrar`, token, {
                       method: 'POST',
                       body: JSON.stringify({
@@ -2354,7 +2368,7 @@ function App() {
                     return;
                   }
                   try {
-                    const printWin = window.open('', '_blank', 'width=420,height=900');
+                    const printWin = (qzIsConnected() && qzPrinterFactura) ? null : window.open('', '_blank', 'width=420,height=900');
                     await api(`/ventas/${modalNcDiferencia.venta_id}/cobrar`, token, {
                       method: 'POST',
                       body: JSON.stringify({
