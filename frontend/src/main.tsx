@@ -231,6 +231,7 @@ function App() {
   const [qzPrinters, setQzPrinters] = useState<string[]>([]);
   const [qzPrinterEtiqueta, setQzPrinterEtiqueta] = useState<string>(() => localStorage.getItem('qz_printer_etiqueta') || '');
   const [qzPrinterFactura, setQzPrinterFactura] = useState<string>(() => localStorage.getItem('qz_printer_factura') || '');
+  const [qzPrinterCarta, setQzPrinterCarta] = useState<string>(() => localStorage.getItem('qz_printer_carta') || '');
   const [qzPanel, setQzPanel] = useState(false);
   const [productoInfoCard, setProductoInfoCard] = useState<any>(null);
   const [modalCantidadProducto, setModalCantidadProducto] = useState<any>(null);
@@ -1145,12 +1146,12 @@ function App() {
   async function imprimirFacturaOrdenFinal(orderId: string) {
     const data = await api<any>(`/orders/${orderId}/final-invoice`, token);
     const html = data.preview_html || '<html><body><p>No hay vista previa.</p></body></html>';
-    if (qzIsConnected() && qzPrinterFactura) {
+    if (qzIsConnected() && qzPrinterCarta) {
       try {
-        await qzPrintHtml(qzPrinterFactura, html, { paperWidth: 80 });
+        await qzPrintHtml(qzPrinterCarta, html, { paperWidth: 215.9, paperHeight: 279.4 });
         return;
       } catch (e: any) {
-        toast('error', `QZ factura: ${e.message}. Imprimiendo en navegador...`);
+        toast('error', `QZ carta: ${e.message}. Imprimiendo en navegador...`);
       }
     }
     const w = window.open('', '_blank', 'width=1024,height=768');
@@ -1478,16 +1479,23 @@ function App() {
           {qzStatus === 'conectado' && (
             <>
               <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Impresora de etiquetas (4×6)</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>🏷️ Impresora de etiquetas (4×6 in)</label>
                 <select value={qzPrinterEtiqueta} onChange={(e) => { setQzPrinterEtiqueta(e.target.value); localStorage.setItem('qz_printer_etiqueta', e.target.value); }} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}>
                   <option value="">— Sin seleccionar —</option>
                   {qzPrinters.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Impresora de facturas (8½×11)</label>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>🧾 Impresora térmica (80mm) — Recibos POS</label>
                 <select value={qzPrinterFactura} onChange={(e) => { setQzPrinterFactura(e.target.value); localStorage.setItem('qz_printer_factura', e.target.value); }} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}>
                   <option value="">— Sin seleccionar —</option>
+                  {qzPrinters.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>📄 Impresora carta (8½×11) — Facturas pedidos</label>
+                <select value={qzPrinterCarta} onChange={(e) => { setQzPrinterCarta(e.target.value); localStorage.setItem('qz_printer_carta', e.target.value); }} style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}>
+                  <option value="">— Sin seleccionar (usa diálogo del navegador) —</option>
                   {qzPrinters.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
