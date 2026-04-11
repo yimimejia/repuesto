@@ -1147,9 +1147,10 @@ function App() {
   async function imprimirFacturaOrdenFinal(orderId: string) {
     const data = await api<any>(`/orders/${orderId}/final-invoice`, token);
     const html = data.preview_html || '<html><body><p>No hay vista previa.</p></body></html>';
-    if (qzIsConnected() && qzPrinterCarta) {
+    const printerCarta = qzPrinterCarta || qzPrinterFactura;
+    if (qzIsConnected() && printerCarta) {
       try {
-        await qzPrintHtml(qzPrinterCarta, html, { paperWidth: 215.9, paperHeight: 279.4 });
+        await qzPrintHtml(printerCarta, html, { paperWidth: 215.9, paperHeight: 279.4 });
         return;
       } catch (e: any) {
         toast('error', `QZ carta: ${e.message}. Imprimiendo en navegador...`);
