@@ -232,7 +232,7 @@ ordersRouter.post('/:id/verificaciones', permitir('cajero', 'vendedor', 'adminis
   res.json({ ok: true });
 });
 
-ordersRouter.post('/:id/bundles/:bundleId/cerrar', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_print_bundle_labels'), (req, res) => {
+ordersRouter.post('/:id/bundles/:bundleId/cerrar', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify', 'can_print_bundle_labels'), (req, res) => {
   const usuario = (req as any).usuario;
   db.prepare("UPDATE bundles SET estado='cerrado', cerrado_por_usuario_id=?, fecha_cierre=?, etiqueta_impresa_en=?, fecha_actualizacion=? WHERE id=? AND order_id=?")
     .run(usuario.id, now(), now(), now(), req.params.bundleId, req.params.id);
@@ -259,7 +259,7 @@ ordersRouter.post('/:id/bundles/:bundleId/cerrar', permitir('cajero', 'vendedor'
 
 
 
-ordersRouter.get('/:id/bundles/:bundleId/label', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_print_bundle_labels'), (req, res) => {
+ordersRouter.get('/:id/bundles/:bundleId/label', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify', 'can_print_bundle_labels'), (req, res) => {
   const bundle = db.prepare(`SELECT b.numero_bulto, b.fecha_cierre, c.codigo as cliente_codigo, c.nombre as cliente_nombre, c.direccion
     FROM bundles b JOIN orders o ON o.id=b.order_id JOIN clientes c ON c.id=o.cliente_id
     WHERE b.id=? AND b.order_id=?`).get(req.params.bundleId, req.params.id) as any;
