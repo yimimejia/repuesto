@@ -74,6 +74,49 @@ comprasRouter.post('/', (req, res) => {
 
   tx();
   registrarAuditoria('compra', id, 'crear', `Compra ${codigo} registrada`, usuario.id);
+
+  // ── Auto-crear registro Formato 606 ────────────────────────────────────────
+  try {
+    const suplidor = db.prepare('SELECT rnc_cedula, nombre_comercial FROM suplidores WHERE id=?').get(d.suplidor_id) as any;
+    const rnc = (suplidor?.rnc_cedula ?? '').replace(/-/g, '').trim();
+    if (rnc && d.numero_ncf) {
+      const fechaRef = (d.fecha_factura ?? now).substring(0, 10);
+      const periodo = fechaRef.replace(/-/g, '').substring(0, 6);
+      const tipoId = rnc.length === 9 ? '1' : '2';
+      const formaMap: Record<string, string> = { contado: '1', credito: '2', 'tarjeta-credito': '3', 'tarjeta-debito': '4', 'cheque': '5', mixto: '6' };
+      const formaPago = formaMap[d.condicion_compra ?? 'contado'] ?? '1';
+      const montoBase = subtotal - descuento;
+      const itbisRecordado = itbis;
+      const totalFacturado = montoBase + itbisRecordado;
+
+      const periodoRow = db.prepare('SELECT periodo FROM tax_606_periods WHERE periodo=?').get(periodo);
+      if (!periodoRow) {
+        db.prepare('INSERT OR IGNORE INTO tax_606_periods(periodo,estado,fecha_creacion) VALUES(?,?,?)').run(periodo, 'abierto', now);
+      }
+
+      const dup = db.prepare(`SELECT id FROM tax_606_records WHERE periodo=? AND rnc_cedula_suplidor=? AND numero_comprobante=? AND estado!='anulado'`).get(periodo, rnc, d.numero_ncf);
+      if (!dup) {
+        db.prepare(`INSERT INTO tax_606_records(
+          id,periodo,rnc_cedula_suplidor,tipo_identificacion,
+          numero_comprobante,fecha_comprobante,
+          monto_bienes,monto_servicios,total_monto_facturado,
+          itbis_facturado,itbis_retenido,itbis_proporcionalidad,itbis_costo,itbis_por_adelantar,
+          itbis_percibido,monto_retencion_renta,isr_percibido,
+          impuesto_selectivo,otros_impuestos,monto_propina_legal,
+          forma_pago,estado,observaciones,errores_json,
+          creado_por_id,actualizado_por_id,fecha_creacion,fecha_actualizacion
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,0,?,0,0,0,0,0,0,?,?,?,?,?,?,?,?)`).run(
+          uuid(), periodo, rnc, tipoId,
+          d.numero_ncf, fechaRef,
+          montoBase, 0, totalFacturado,
+          itbisRecordado, Math.max(0, itbisRecordado),
+          formaPago, 'borrador', d.observaciones ?? null, null,
+          usuario.id, usuario.id, now, now
+        );
+      }
+    }
+  } catch (_) { /* No interrumpir si falla el 606 */ }
+
   res.status(201).json({ id, codigo_compra: codigo, total });
 });
 

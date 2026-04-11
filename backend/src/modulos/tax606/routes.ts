@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { db } from '../../db/connection.js';
-import { permitir } from '../../shared/auth.js';
+import { auth, permitir } from '../../shared/auth.js';
 
 export const tax606Router = Router();
+tax606Router.use(auth);
 
 const now = () => new Date().toISOString();
 const uid = () => crypto.randomUUID();
