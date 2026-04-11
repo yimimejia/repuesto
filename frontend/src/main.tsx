@@ -249,6 +249,7 @@ function App() {
   const [imagenEditPreview, setImagenEditPreview] = useState('');
   const [choferes, setChoferes] = useState<any[]>([]);
   const [choferSeleccionado, setChoferSeleccionado] = useState<Record<string, string>>({});
+  const [ordenesSubTab, setOrdenesSubTab] = useState<'activas'|'entregadas'>('activas');
 
   const [modalCliente, setModalCliente] = useState(false);
   const [editandoCliente, setEditandoCliente] = useState<any>(null);
@@ -2700,11 +2701,25 @@ function App() {
             await cargarTodo();
           } catch (er: any) { toast('error', er.message); }
         };
+        const ordenesActivas = ordenes.filter((o: any) => o.estado !== 'entregado');
+        const ordenesEntregadas = ordenes.filter((o: any) => o.estado === 'entregado');
+        const ordenesMostradas = ordenesSubTab === 'entregadas' ? ordenesEntregadas : ordenesActivas;
         return (
         <article className="panel-card span-12">
           <div className="panel-head">
             <h3>Órdenes / Pedidos</h3>
-            <span className="chip chip-soft">{ordenes.length} órdenes</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setOrdenesSubTab('activas')}
+                className={ordenesSubTab === 'activas' ? 'btn btn-primary' : 'btn btn-ghost'}
+                style={{ padding: '4px 14px', fontSize: 13 }}>
+                📦 Activas <span className="chip chip-soft" style={{ fontSize: 11, marginLeft: 4 }}>{ordenesActivas.length}</span>
+              </button>
+              <button onClick={() => setOrdenesSubTab('entregadas')}
+                className={ordenesSubTab === 'entregadas' ? 'btn btn-primary' : 'btn btn-ghost'}
+                style={{ padding: '4px 14px', fontSize: 13 }}>
+                ✅ Entregadas <span className="chip chip-verde" style={{ fontSize: 11, marginLeft: 4 }}>{ordenesEntregadas.length}</span>
+              </button>
+            </div>
           </div>
           <table className="table-premium">
             <thead>
@@ -2714,9 +2729,9 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {ordenes.length === 0
-                ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin órdenes</td></tr>
-                : ordenes.map((o: any) => (
+              {ordenesMostradas.length === 0
+                ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)' }}>{ordenesSubTab === 'entregadas' ? 'No hay órdenes entregadas' : 'Sin órdenes activas'}</td></tr>
+                : ordenesMostradas.map((o: any) => (
                 <tr key={o.id}>
                   <td><strong style={{ fontSize: 13 }}>{o.numero_orden}</strong></td>
                   <td>{o.cliente_nombre}</td>
