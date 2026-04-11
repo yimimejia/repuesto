@@ -336,16 +336,16 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
     totalItbis += itbisUnit * cant;
     totalNeto += totalLinea;
     return `<tr>
-      <td>${it.producto_codigo ?? ''}</td>
-      <td style="text-align:center">${cant.toFixed(2)}</td>
-      <td style="text-align:center">${it.bulto_num ?? '-'}</td>
-      <td style="text-align:center">UNI</td>
-      <td>${(it.descripcion ?? '').toUpperCase()}</td>
-      <td style="text-align:right">${fmt(precio)}</td>
-      <td style="text-align:right">${fmt(descUnit)}</td>
-      <td style="text-align:right">${fmt(itbisUnit)}</td>
-      <td style="text-align:right">${fmt(precioNeto)}</td>
-      <td style="text-align:right">${fmt(totalLinea)}</td>
+      <td class="ctr">${it.producto_codigo ?? ''}</td>
+      <td class="ctr">${cant % 1 === 0 ? cant.toFixed(0) : cant.toFixed(2)}</td>
+      <td class="ctr">${it.bulto_num ?? '-'}</td>
+      <td class="ctr">UNI</td>
+      <td class="desc">${(it.descripcion ?? '').toUpperCase()}</td>
+      <td class="num">${fmt(precio)}</td>
+      <td class="num">${fmt(descUnit)}</td>
+      <td class="num">${fmt(itbisUnit)}</td>
+      <td class="num">${fmt(precioNeto)}</td>
+      <td class="num">${fmt(totalLinea)}</td>
     </tr>`;
   }).join('');
 
@@ -367,29 +367,44 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
   <title>Factura ${o.numero_orden}</title>
   <style>
-    @page { size: 8.5in 11in portrait; margin: 0.4in 0.5in; }
+    @page { size: 8.5in 11in portrait; margin: 0.55in 0.65in; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 10px; color: #111; }
-    .header { display: grid; grid-template-columns: 110px 1fr 1fr; gap: 6px; margin-bottom: 6px; }
-    .logo-box { display: flex; flex-direction: column; align-items: flex-start; }
-    .company-name { font-size: 13px; font-weight: 900; text-align: center; grid-column: 1/-1; margin-bottom: 4px; }
-    .desc-box { border: 1px solid #aaa; padding: 4px 6px; font-size: 8.5px; line-height: 1.4; }
-    .addr-box { border: 1px solid #aaa; padding: 4px 6px; font-size: 8.5px; text-align: right; }
-    .center-box { text-align: center; font-size: 10px; }
-    .fiscal-box { border: 1px solid #aaa; padding: 4px 6px; font-size: 8.5px; }
-    .factura-title { font-size: 12px; font-weight: 700; }
-    .pedido-row { display: flex; justify-content: flex-end; gap: 30px; font-size: 9px; margin-bottom: 4px; }
-    .client-section { border: 1px solid #aaa; padding: 5px 8px; margin-bottom: 6px; font-size: 9px; line-height: 1.7; }
-    table { width: 100%; border-collapse: collapse; }
-    th { background: #f0f0f0; border: 1px solid #888; padding: 3px 4px; font-size: 8px; text-align: center; }
-    td { border: 1px solid #aaa; padding: 2px 4px; font-size: 8.5px; }
-    .totals-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
-    .totals-table td { border: none; padding: 2px 6px; font-size: 9px; text-align: right; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #111; }
+    .company-name { font-size: 15px; font-weight: 900; text-align: center; margin-bottom: 10px; letter-spacing: 0.5px; }
+    .header { display: grid; grid-template-columns: 120px 1fr 200px; gap: 8px; margin-bottom: 10px; align-items: stretch; }
+    .logo-box { display: flex; align-items: center; }
+    .desc-box { border: 1px solid #888; padding: 7px 10px; font-size: 10px; line-height: 1.55; display: flex; flex-direction: column; justify-content: space-between; }
+    .addr-box { border: 1px solid #888; padding: 7px 10px; font-size: 10px; text-align: right; line-height: 1.55; }
+    .fiscal-box { border: 1px solid #888; padding: 7px 10px; font-size: 10px; margin-top: 6px; line-height: 1.55; }
+    .factura-title { font-size: 13px; font-weight: 800; text-align: center; margin-top: 8px; }
+    .factura-sub { font-size: 10px; text-align: center; margin-top: 2px; }
+    .pedido-row { display: flex; justify-content: flex-end; gap: 40px; font-size: 10px; margin-bottom: 6px; font-weight: 600; }
+    .client-section { border: 1px solid #888; padding: 8px 12px; margin-bottom: 10px; font-size: 10.5px; line-height: 1.8; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    col.c-cod  { width: 7%; }
+    col.c-cant { width: 6%; }
+    col.c-blt  { width: 6%; }
+    col.c-ref  { width: 5%; }
+    col.c-desc { width: 22%; }
+    col.c-pre  { width: 10%; }
+    col.c-des  { width: 10%; }
+    col.c-itb  { width: 8%; }
+    col.c-pn   { width: 13%; }
+    col.c-tn   { width: 13%; }
+    th { background: #f0f0f0; border: 1px solid #666; padding: 5px 4px; font-size: 9.5px; text-align: center; white-space: nowrap; }
+    td { border: 1px solid #aaa; padding: 5px 5px; font-size: 10px; vertical-align: top; }
+    td.desc { white-space: normal; word-break: break-word; line-height: 1.4; }
+    td.num  { text-align: right; white-space: nowrap; }
+    td.ctr  { text-align: center; white-space: nowrap; }
+    .totals-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 10px; }
+    .totals-table { border-collapse: collapse; }
+    .totals-table td { border: none; padding: 3px 8px; font-size: 10.5px; text-align: right; white-space: nowrap; }
     .totals-table td:first-child { text-align: left; }
-    .sig-row { display: flex; justify-content: space-around; margin-top: 30px; }
-    .sig-box { text-align: center; border-top: 1px solid #333; padding-top: 4px; width: 180px; font-size: 9px; }
-    .footer-logos { display: flex; justify-content: center; gap: 40px; margin-top: 16px; align-items: center; }
-    .footer-logo { font-size: 18px; font-weight: 900; }
+    .totals-table tr:last-child td { font-weight: 800; font-size: 11px; border-top: 1.5px solid #333; padding-top: 5px; }
+    .sig-row { display: flex; justify-content: space-around; margin-top: 40px; }
+    .sig-box { text-align: center; border-top: 1px solid #333; padding-top: 5px; width: 200px; font-size: 10px; }
+    .footer-logos { display: flex; justify-content: center; gap: 50px; margin-top: 20px; align-items: center; }
+    .footer-logo { font-size: 20px; font-weight: 900; }
     .footer-logo.linumax { color: #e63946; }
     .footer-logo.haojue { color: #1d3557; }
   </style>
@@ -397,13 +412,16 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   <div class="company-name">IMPORTADORA REPUESTOS CALCAÑO SRL</div>
   <div class="header">
     <div class="logo-box">${irc_svg}</div>
-    <div class="desc-box">COMERCIALIZACION Y DISTRIBUCION DE<br/>REPUESTOS ORIGINALES Y DE ALTA<br/>CALIDAD PARA MOTOCICLETAS
-      <br/><br/>
-      <div class="center-box"><div class="factura-title">FACTURA</div><div>VALIDA PARA CREDITO FISCAL</div></div>
+    <div class="desc-box">
+      <div>COMERCIALIZACION Y DISTRIBUCION DE REPUESTOS ORIGINALES Y DE ALTA CALIDAD PARA MOTOCICLETAS</div>
+      <div>
+        <div class="factura-title">FACTURA</div>
+        <div class="factura-sub">VALIDA PARA CREDITO FISCAL</div>
+      </div>
     </div>
     <div>
-      <div class="addr-box">VILLA MAGDALENA SAN PEDRO<br/>DE MACORIS RNC:130716171</div>
-      <div class="fiscal-box" style="margin-top:4px">
+      <div class="addr-box">VILLA MAGDALENA SAN PEDRO<br/>DE MACORIS<br/>RNC: 130716171</div>
+      <div class="fiscal-box">
         <div>FECHA: ${fechaDoc}</div>
         <div>VENCE: ${ncfVence}</div>
         <div>NCF: ${o.ncf ?? '-'}</div>
@@ -417,13 +435,17 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   </div>
   <div class="client-section">
     <strong>CLIENTE</strong><br/>
-    COD: ${o.cliente_codigo ?? '-'} &nbsp;&nbsp;&nbsp;
-    NOMBRE: ${(o.cliente_nombre ?? '').toUpperCase()}<br/>
+    COD: ${o.cliente_codigo ?? '-'} &nbsp;&nbsp;&nbsp; NOMBRE: ${(o.cliente_nombre ?? '').toUpperCase()}<br/>
     RNC: ${o.cliente_rnc ?? '-'}<br/>
     DIRECCIÓN: ${(o.direccion ?? '').toUpperCase()}<br/>
     VENDEDOR: ${(o.vendedor_nombre ?? '').toUpperCase()} &nbsp;&nbsp;&nbsp; TEL: ${o.telefono_1 ?? '-'}
   </div>
   <table>
+    <colgroup>
+      <col class="c-cod"/><col class="c-cant"/><col class="c-blt"/><col class="c-ref"/>
+      <col class="c-desc"/><col class="c-pre"/><col class="c-des"/><col class="c-itb"/>
+      <col class="c-pn"/><col class="c-tn"/>
+    </colgroup>
     <thead><tr>
       <th>COD</th><th>CANT</th><th>BULTO</th><th>REF</th><th style="text-align:left">DESCRIPCION</th>
       <th>PRECIO</th><th>DESCUENTO</th><th>ITBIS</th><th>PRECIO NETO</th><th>TOTAL NETO</th>
@@ -431,12 +453,12 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
     <tbody>${rows}</tbody>
   </table>
   <div class="totals-row">
-    <div style="font-size:10px;font-weight:700">TOTAL BULTOS: ${totalBultos}</div>
-    <table class="totals-table" style="width:220px">
+    <div style="font-size:11px;font-weight:700;margin-top:4px">TOTAL BULTOS: ${totalBultos}</div>
+    <table class="totals-table">
       <tr><td>SUB-TOTAL</td><td>${fmt(subTotal)}</td></tr>
       <tr><td>ITBIS</td><td>${fmt(totalItbis)}</td></tr>
       <tr><td>${desc_pct > 0 ? desc_pct + '%' : ''} DESCUENTO</td><td>${fmt(totalDesc)}</td></tr>
-      <tr><td><strong>TOTAL NETO</strong></td><td><strong>${fmt(totalNeto)}</strong></td></tr>
+      <tr><td>TOTAL NETO</td><td>${fmt(totalNeto)}</td></tr>
     </table>
   </div>
   <div class="sig-row">
