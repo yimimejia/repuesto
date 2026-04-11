@@ -313,6 +313,9 @@ function App() {
   const [nuevaCompra, setNuevaCompra] = useState<any>({ suplidor_id: '', sucursal_id: '', numero_factura: '', numero_ncf: '', fecha_factura: '', fecha_vencimiento: '', condicion_compra: 'contado', estado_pago: 'pendiente', observaciones: '', items: [] as any[] });
   const [itemCompra, setItemCompra] = useState<any>({ producto_id: '', cantidad: 1, costo_unitario: 0, itbis_tasa: 0.18, descuento_monto: 0 });
   const [modalCompra, setModalCompra] = useState(false);
+  const [showNuevoProdCompra, setShowNuevoProdCompra] = useState(false);
+  const [nuevoProdCompra, setNuevoProdCompra] = useState<any>({ codigo: '', nombre: '', marca: '', medida: '', costo: 0, precio: 0, lleva_itbis: true, itbis_porcentaje: 18, categoria: '', suplidor_principal_id: '' });
+  const [guardandoProdCompra, setGuardandoProdCompra] = useState(false);
   const [editandoSuplidor, setEditandoSuplidor] = useState<any>(null);
   const [cxcCobroModal, setCxcCobroModal] = useState<any>(null);
   const [cxcCobroMonto, setCxcCobroMonto] = useState('');
@@ -3745,31 +3748,158 @@ function App() {
 
       {modalCompra && (
         <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setModalCompra(false); }}>
-          <div className="modal-card modal-card-wide">
+          <div className="modal-card modal-card-wide" style={{ maxWidth: 860, maxHeight: '92vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h3>Registrar compra</h3>
               <button className="btn btn-ghost" onClick={() => setModalCompra(false)}>✕ Cerrar</button>
             </div>
-            <div className="quick-form" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-              <select value={nuevaCompra.suplidor_id} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, suplidor_id: e.target.value }))}><option value="">Suplidor</option>{suplidores.map((s) => <option key={s.id} value={s.id}>{s.nombre_comercial}</option>)}</select>
-              <select value={nuevaCompra.sucursal_id} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, sucursal_id: e.target.value }))}><option value="">Sucursal destino</option>{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select>
-              <input placeholder="Factura suplidor" value={nuevaCompra.numero_factura} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, numero_factura: e.target.value }))} />
-              <input placeholder="NCF suplidor" value={nuevaCompra.numero_ncf} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, numero_ncf: e.target.value }))} />
-              <input type="date" value={nuevaCompra.fecha_factura} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, fecha_factura: e.target.value }))} />
-              <input type="date" value={nuevaCompra.fecha_vencimiento} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, fecha_vencimiento: e.target.value }))} />
-              <select value={nuevaCompra.condicion_compra} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, condicion_compra: e.target.value }))}><option value="contado">Contado</option><option value="credito">Crédito</option></select>
-              <input placeholder="Observaciones" value={nuevaCompra.observaciones} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, observaciones: e.target.value }))} />
+
+            {/* ── Datos de la compra ── */}
+            <div className="quick-form" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 16 }}>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Suplidor *</label>
+                <select style={{ width: '100%' }} value={nuevaCompra.suplidor_id} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, suplidor_id: e.target.value }))}>
+                  <option value="">— Seleccionar —</option>{suplidores.map((s) => <option key={s.id} value={s.id}>{s.nombre_comercial}</option>)}</select></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Sucursal destino *</label>
+                <select style={{ width: '100%' }} value={nuevaCompra.sucursal_id} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, sucursal_id: e.target.value }))}>
+                  <option value="">— Seleccionar —</option>{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>N° Factura del suplidor</label>
+                <input style={{ width: '100%' }} placeholder="Ej: FAC-001" value={nuevaCompra.numero_factura} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, numero_factura: e.target.value }))} /></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>NCF (Comprobante fiscal)</label>
+                <input style={{ width: '100%' }} placeholder="Ej: B0100000001" value={nuevaCompra.numero_ncf} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, numero_ncf: e.target.value }))} /></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Fecha de la factura</label>
+                <input style={{ width: '100%' }} type="date" value={nuevaCompra.fecha_factura} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, fecha_factura: e.target.value }))} /></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Fecha de vencimiento (crédito)</label>
+                <input style={{ width: '100%' }} type="date" value={nuevaCompra.fecha_vencimiento} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, fecha_vencimiento: e.target.value }))} /></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Condición de pago</label>
+                <select style={{ width: '100%' }} value={nuevaCompra.condicion_compra} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, condicion_compra: e.target.value }))}>
+                  <option value="contado">Contado</option><option value="credito">Crédito</option></select></div>
+              <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Observaciones</label>
+                <input style={{ width: '100%' }} placeholder="Notas adicionales..." value={nuevaCompra.observaciones} onChange={(e) => setNuevaCompra((s: any) => ({ ...s, observaciones: e.target.value }))} /></div>
             </div>
-            <div className="quick-form" style={{ gridTemplateColumns: '2fr repeat(4,1fr) auto' }}>
-              <select value={itemCompra.producto_id} onChange={(e) => setItemCompra((s: any) => ({ ...s, producto_id: e.target.value }))}><option value="">Producto</option>{productos.map((p) => <option key={p.id} value={p.id}>{p.codigo} - {p.nombre}</option>)}</select>
-              <input type="number" value={itemCompra.cantidad} onChange={(e) => setItemCompra((s: any) => ({ ...s, cantidad: Number(e.target.value) }))} />
-              <input type="number" value={itemCompra.costo_unitario} onChange={(e) => setItemCompra((s: any) => ({ ...s, costo_unitario: Number(e.target.value) }))} />
-              <input type="number" value={itemCompra.itbis_tasa} onChange={(e) => setItemCompra((s: any) => ({ ...s, itbis_tasa: Number(e.target.value) }))} />
-              <input type="number" value={itemCompra.descuento_monto} onChange={(e) => setItemCompra((s: any) => ({ ...s, descuento_monto: Number(e.target.value) }))} />
-              <button className="btn btn-ghost" onClick={() => { const p = productos.find((x) => x.id === itemCompra.producto_id); if (!p) return; setNuevaCompra((s: any) => ({ ...s, items: [...s.items, { ...itemCompra, descripcion: p.nombre }] })); }}>Agregar item</button>
+
+            {/* ── Agregar productos a la compra ── */}
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px', marginBottom: 12, border: '1px solid #e2e8f0' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>Agregar producto a la compra</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Producto</label>
+                  <select style={{ width: '100%' }} value={itemCompra.producto_id} onChange={(e) => setItemCompra((s: any) => ({ ...s, producto_id: e.target.value }))}>
+                    <option value="">— Buscar producto —</option>
+                    {productos.map((p) => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
+                  </select></div>
+                <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Cantidad</label>
+                  <input style={{ width: '100%' }} type="number" min="1" value={itemCompra.cantidad} onChange={(e) => setItemCompra((s: any) => ({ ...s, cantidad: Number(e.target.value) }))} /></div>
+                <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Costo unitario (RD$)</label>
+                  <input style={{ width: '100%' }} type="number" min="0" step="0.01" value={itemCompra.costo_unitario} onChange={(e) => setItemCompra((s: any) => ({ ...s, costo_unitario: Number(e.target.value) }))} /></div>
+                <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>ITBIS (0.18 = 18%)</label>
+                  <input style={{ width: '100%' }} type="number" min="0" step="0.01" value={itemCompra.itbis_tasa} onChange={(e) => setItemCompra((s: any) => ({ ...s, itbis_tasa: Number(e.target.value) }))} /></div>
+                <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Descuento (RD$)</label>
+                  <input style={{ width: '100%' }} type="number" min="0" step="0.01" value={itemCompra.descuento_monto} onChange={(e) => setItemCompra((s: any) => ({ ...s, descuento_monto: Number(e.target.value) }))} /></div>
+                <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    const p = productos.find((x) => x.id === itemCompra.producto_id);
+                    if (!p) { toast('warn', 'Selecciona un producto'); return; }
+                    setNuevaCompra((s: any) => ({ ...s, items: [...s.items, { ...itemCompra, descripcion: p.nombre }] }));
+                    setItemCompra((s: any) => ({ ...s, producto_id: '', cantidad: 1, costo_unitario: 0, descuento_monto: 0 }));
+                  }}>+ Agregar</button>
+              </div>
+
+              {/* ── Mini-formulario para producto nuevo ── */}
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #cbd5e1' }}>
+                <button className="btn btn-ghost" style={{ fontSize: 12 }}
+                  onClick={() => setShowNuevoProdCompra((v) => !v)}>
+                  {showNuevoProdCompra ? '▲ Ocultar' : '➕ El producto no existe — crear nuevo producto'}
+                </button>
+                {showNuevoProdCompra && (
+                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                    <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Código interno *</label>
+                      <input style={{ width: '100%' }} placeholder="Ej: REP-0001" value={nuevoProdCompra.codigo}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, codigo: e.target.value }))} /></div>
+                    <div style={{ gridColumn: 'span 2' }}><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Nombre / descripción del producto *</label>
+                      <input style={{ width: '100%' }} placeholder="Ej: Filtro de aceite Honda Civic" value={nuevoProdCompra.nombre}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, nombre: e.target.value }))} /></div>
+                    <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Marca</label>
+                      <input style={{ width: '100%' }} placeholder="Ej: Honda, Bosch..." value={nuevoProdCompra.marca}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, marca: e.target.value }))} /></div>
+                    <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Medida / presentación</label>
+                      <input style={{ width: '100%' }} placeholder="Ej: 1 unidad, 1L, Kit..." value={nuevoProdCompra.medida}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, medida: e.target.value }))} /></div>
+                    <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Categoría</label>
+                      <select style={{ width: '100%' }} value={nuevoProdCompra.categoria}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, categoria: e.target.value }))}>
+                        <option value="">— Sin categoría —</option>
+                        {categorias.map((c: any) => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                      </select></div>
+                    <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Costo de compra (RD$)</label>
+                      <input style={{ width: '100%' }} type="number" min="0" step="0.01" value={nuevoProdCompra.costo}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, costo: Number(e.target.value) }))} /></div>
+                    <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Precio de venta (RD$)</label>
+                      <input style={{ width: '100%' }} type="number" min="0" step="0.01" value={nuevoProdCompra.precio}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, precio: Number(e.target.value) }))} /></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 16 }}>
+                      <input type="checkbox" id="chk-itbis-prod" checked={!!nuevoProdCompra.lleva_itbis}
+                        onChange={(e) => setNuevoProdCompra((s: any) => ({ ...s, lleva_itbis: e.target.checked }))} />
+                      <label htmlFor="chk-itbis-prod" style={{ fontSize: 12 }}>Lleva ITBIS (18%)</label>
+                    </div>
+                    <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8 }}>
+                      <button className="btn btn-primary" disabled={guardandoProdCompra || !nuevoProdCompra.codigo || !nuevoProdCompra.nombre}
+                        onClick={async () => {
+                          setGuardandoProdCompra(true);
+                          try {
+                            const resp = await api<any>('/productos', token, { method: 'POST', body: JSON.stringify({
+                              ...nuevoProdCompra,
+                              itbis_tasa: nuevoProdCompra.lleva_itbis ? 0.18 : 0,
+                              itbis_porcentaje: nuevoProdCompra.lleva_itbis ? 18 : 0,
+                              precio_negocio_1: nuevoProdCompra.precio, precio_negocio_2: nuevoProdCompra.precio,
+                              tipo: 'producto', margen: 0, existencia_minima: 0, cantidad_a_ordenar: 0
+                            }) });
+                            await cargarTodo();
+                            const nuevoId = resp?.id ?? '';
+                            setItemCompra((s: any) => ({ ...s, producto_id: nuevoId, costo_unitario: nuevoProdCompra.costo, itbis_tasa: nuevoProdCompra.lleva_itbis ? 0.18 : 0 }));
+                            setNuevoProdCompra({ codigo: '', nombre: '', marca: '', medida: '', costo: 0, precio: 0, lleva_itbis: true, itbis_porcentaje: 18, categoria: '', suplidor_principal_id: '' });
+                            setShowNuevoProdCompra(false);
+                            toast('ok', `Producto "${nuevoProdCompra.nombre}" creado y seleccionado`);
+                          } catch (e: any) { toast('error', e.message); }
+                          finally { setGuardandoProdCompra(false); }
+                        }}>
+                        {guardandoProdCompra ? 'Guardando...' : '✅ Crear producto y seleccionar'}
+                      </button>
+                      <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowNuevoProdCompra(false)}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <table className="table-premium"><thead><tr><th>Producto</th><th>Cant</th><th>Costo</th><th>ITBIS</th><th>Descuento</th><th></th></tr></thead><tbody>{nuevaCompra.items.map((i: any, idx: number) => <tr key={idx}><td>{i.descripcion}</td><td>{i.cantidad}</td><td>{i.costo_unitario}</td><td>{i.itbis_tasa}</td><td>{i.descuento_monto}</td><td><button className="btn btn-ghost" onClick={() => setNuevaCompra((s: any) => ({ ...s, items: s.items.filter((_: any, n: number) => n !== idx) }))}>Quitar</button></td></tr>)}</tbody></table>
-            <button className="btn btn-primary" onClick={() => crearCompra().then(() => setModalCompra(false)).catch((e) => toast('error', e.message))}>Registrar compra</button>
+
+            {/* ── Items agregados ── */}
+            {nuevaCompra.items.length > 0 && (
+              <table className="table-premium" style={{ marginBottom: 12 }}>
+                <thead><tr><th>Producto</th><th style={{ textAlign: 'right' }}>Cant</th><th style={{ textAlign: 'right' }}>Costo unit.</th><th style={{ textAlign: 'right' }}>ITBIS</th><th style={{ textAlign: 'right' }}>Descuento</th><th style={{ textAlign: 'right' }}>Subtotal</th><th></th></tr></thead>
+                <tbody>
+                  {nuevaCompra.items.map((i: any, idx: number) => (
+                    <tr key={idx}>
+                      <td>{i.descripcion}</td>
+                      <td style={{ textAlign: 'right' }}>{i.cantidad}</td>
+                      <td style={{ textAlign: 'right' }}>RD$ {Number(i.costo_unitario).toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(i.itbis_tasa) * 100).toFixed(0)}%</td>
+                      <td style={{ textAlign: 'right' }}>RD$ {Number(i.descuento_monto).toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>RD$ {(Number(i.cantidad) * Number(i.costo_unitario) * (1 + Number(i.itbis_tasa)) - Number(i.descuento_monto)).toFixed(2)}</td>
+                      <td><button className="btn btn-ghost" style={{ color: '#dc2626', fontSize: 11 }} onClick={() => setNuevaCompra((s: any) => ({ ...s, items: s.items.filter((_: any, n: number) => n !== idx) }))}>Quitar</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {nuevaCompra.items.length === 0 && (
+              <p style={{ color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontSize: 13 }}>Sin productos agregados aún</p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => setModalCompra(false)}>Cancelar</button>
+              <button className="btn btn-primary" disabled={nuevaCompra.items.length === 0}
+                onClick={() => crearCompra().then(() => setModalCompra(false)).catch((e) => toast('error', e.message))}>
+                💾 Registrar compra ({nuevaCompra.items.length} producto{nuevaCompra.items.length !== 1 ? 's' : ''})
+              </button>
+            </div>
           </div>
         </div>
       )}
