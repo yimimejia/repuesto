@@ -2999,11 +2999,24 @@ function App() {
                         } catch (er: any) { toast('error', er.message); }
                       }}>📦 Cerrar bulto</button>
                       <button className="btn btn-ghost" style={{ width: '100%', fontSize: 13 }}
-                        onClick={() => imprimirFacturaOrdenFinal(ordenDelBulto.id).catch((e: any) => toast('error', e.message))}>
+                        onClick={async () => {
+                          try {
+                            await imprimirFacturaOrdenFinal(ordenDelBulto.id);
+                            setBundleActual(null); setBultoItems([]); setOrdenItemsCache({});
+                            await cargarTodo();
+                          } catch (e: any) { toast('error', e.message); }
+                        }}>
                         🖨️ Imprimir factura
                       </button>
                       <button style={{ width: '100%', fontSize: 12, padding: '7px 0', border: '1px solid #fecaca', borderRadius: 6, background: 'none', color: '#ef4444', cursor: 'pointer' }}
-                        onClick={() => { if (confirm('¿Cancelar este bulto y volver a la lista?')) { setBundleActual(null); setBultoItems([]); setOrdenItemsCache({}); } }}>
+                        onClick={async () => {
+                          if (!confirm('¿Cancelar este bulto y volver a la lista?')) return;
+                          try {
+                            await api(`/orders/${ordenDelBulto.id}/bundles/${bundleActual!.id}/cancelar`, token, { method: 'POST' }).catch(() => {});
+                          } finally {
+                            setBundleActual(null); setBultoItems([]); setOrdenItemsCache({});
+                          }
+                        }}>
                         Cancelar y volver
                       </button>
                     </div>

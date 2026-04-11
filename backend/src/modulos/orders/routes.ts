@@ -162,10 +162,23 @@ ordersRouter.post('/:id/verificar/iniciar', permitir('cajero', 'vendedor', 'admi
 });
 
 ordersRouter.post('/:id/bundles', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
+  // Reutilizar bulto abierto vacío si existe, para evitar que cancelar incremente el número
+  const existente = db.prepare(`SELECT b.id, b.numero_bulto, b.estado FROM bundles b WHERE b.order_id=? AND b.estado='abierto' AND NOT EXISTS (SELECT 1 FROM bundle_items bi WHERE bi.bundle_id=b.id) ORDER BY b.numero_bulto DESC LIMIT 1`).get(req.params.id) as any;
+  if (existente) return res.status(201).json({ id: existente.id, numero_bulto: existente.numero_bulto, estado: existente.estado });
   const next = db.prepare('SELECT COALESCE(MAX(numero_bulto),0)+1 as n FROM bundles WHERE order_id=?').get(req.params.id) as any;
   const id = uuid();
   db.prepare('INSERT INTO bundles(id,order_id,numero_bulto,estado,fecha_creacion,fecha_actualizacion) VALUES(?,?,?,?,?,?)').run(id, req.params.id, next.n, 'abierto', now(), now());
   res.status(201).json({ id, numero_bulto: next.n, estado: 'abierto' });
+});
+
+// Cancelar (eliminar) un bulto abierto y vacío
+ordersRouter.post('/:id/bundles/:bundleId/cancelar', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
+  const tieneItems = db.prepare('SELECT COUNT(*) as c FROM bundle_items WHERE bundle_id=?').get(req.params.bundleId) as any;
+  if (Number(tieneItems.c) > 0) return res.status(409).json({ error: 'No se puede cancelar un bulto con artículos' });
+  const bundle = db.prepare(`SELECT id FROM bundles WHERE id=? AND order_id=? AND estado='abierto'`).get(req.params.bundleId, req.params.id) as any;
+  if (!bundle) return res.status(404).json({ error: 'Bulto no encontrado o ya cerrado' });
+  db.prepare('DELETE FROM bundles WHERE id=?').run(req.params.bundleId);
+  res.json({ ok: true });
 });
 
 ordersRouter.get('/:id/items-pendientes', permitir('cajero', 'vendedor', 'administrador'), permitirCapacidad('can_verify'), (req, res) => {
@@ -289,6 +302,11 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
     LEFT JOIN ventas v ON v.id=o.venta_origen_id
     WHERE o.id=?`).get(req.params.id) as any;
   if (!o) return res.status(404).json({ error: 'Orden no encontrada' });
+
+  // Avanzar estado automáticamente al imprimir la factura
+  if (o.estado === 'empacando' || o.estado === 'en_verificacion') {
+    db.prepare("UPDATE orders SET estado='verificada', fecha_actualizacion=? WHERE id=?").run(now(), req.params.id);
+  }
 
   const items = db.prepare(`
     SELECT oi.descripcion, oi.cantidad, oi.precio_unitario,
