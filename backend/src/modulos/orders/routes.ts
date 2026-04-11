@@ -354,56 +354,86 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   const ncfVence = o.ncf ? fechaVenc.toLocaleDateString('es-DO') : '-';
   const tipoComp = o.tipo_comprobante === 'credito_fiscal' ? 'CRÉDITO FISCAL' : o.tipo_comprobante === 'consumidor_final' ? 'CONSUMIDOR FINAL' : (o.tipo_comprobante ?? 'CRÉDITO FISCAL');
 
-  const irc_svg = `<svg xmlns="http://www.w3.org/2000/svg" width="90" height="70" viewBox="0 0 90 70">
-    <g transform="translate(5,5)">
-      <circle cx="28" cy="30" r="24" fill="none" stroke="#0a2d6e" stroke-width="5"/>
-      <circle cx="28" cy="30" r="15" fill="none" stroke="#0a2d6e" stroke-width="3"/>
-      <text x="28" y="36" text-anchor="middle" font-size="14" font-family="Arial" font-weight="900" fill="#b91c1c">@</text>
-      ${[0,45,90,135,180,225,270,315].map(a=>`<rect x="24.5" y="2" width="7" height="9" rx="2" fill="#0a2d6e" transform="rotate(${a} 28 30)"/>`).join('')}
-    </g>
-    <text x="60" y="38" text-anchor="middle" font-size="28" font-family="Arial" font-weight="900"><tspan fill="#0a2d6e">I</tspan><tspan fill="#b91c1c">R</tspan><tspan fill="#0a2d6e">C</tspan></text>
+  const irc_svg = `<svg xmlns="http://www.w3.org/2000/svg" width="140" height="90" viewBox="0 0 140 90">
+    <!-- gear outer ring -->
+    <circle cx="44" cy="45" r="38" fill="#c8102e"/>
+    <!-- gear teeth 8x -->
+    ${[0,45,90,135,180,225,270,315].map(a=>`<rect x="39" y="3" width="10" height="13" rx="3" fill="#c8102e" transform="rotate(${a} 44 45)"/>`).join('')}
+    <!-- inner white ring -->
+    <circle cx="44" cy="45" r="26" fill="white"/>
+    <!-- inner red hub -->
+    <circle cx="44" cy="45" r="18" fill="#c8102e"/>
+    <!-- spokes -->
+    ${[0,60,120,180,240,300].map(a=>`<line x1="44" y1="27" x2="44" y2="45" stroke="white" stroke-width="2" transform="rotate(${a} 44 45)"/>`).join('')}
+    <!-- hub center -->
+    <circle cx="44" cy="45" r="5" fill="white"/>
+    <!-- motorcycle side silhouette (white) -->
+    <!-- rear wheel -->
+    <circle cx="22" cy="54" r="9" fill="none" stroke="white" stroke-width="2.5"/>
+    <circle cx="22" cy="54" r="4" fill="white"/>
+    <!-- front wheel -->
+    <circle cx="64" cy="54" r="9" fill="none" stroke="white" stroke-width="2.5"/>
+    <circle cx="64" cy="54" r="4" fill="white"/>
+    <!-- frame -->
+    <path d="M22 46 L34 28 L52 28 L58 36 L64 46" fill="none" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+    <!-- seat/tank -->
+    <path d="M34 28 L52 28 L52 35 L34 35 Z" fill="white"/>
+    <!-- rider body simplified -->
+    <path d="M48 28 L54 18 L62 22 L58 30" fill="white"/>
+    <!-- handlebar -->
+    <line x1="62" y1="22" x2="68" y2="26" stroke="white" stroke-width="2.5"/>
+    <!-- engine block -->
+    <rect x="30" y="38" width="20" height="10" rx="2" fill="white" opacity="0.7"/>
+    <!-- IRC text -->
+    <text y="55" font-family="Arial Black,Arial" font-weight="900" font-size="32">
+      <tspan x="88" fill="#0a2d6e">I</tspan><tspan fill="#c8102e">R</tspan><tspan fill="#0a2d6e">C</tspan>
+    </text>
   </svg>`;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
   <title>Factura ${o.numero_orden}</title>
   <style>
-    @page { size: 8.5in 11in portrait; margin: 0.55in 0.65in; }
+    @page { size: 8.5in 11in portrait; margin: 0.5in 0.55in; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 11px; color: #111; }
-    .company-name { font-size: 15px; font-weight: 900; text-align: center; margin-bottom: 10px; letter-spacing: 0.5px; }
-    .header { display: grid; grid-template-columns: 120px 1fr 200px; gap: 8px; margin-bottom: 10px; align-items: stretch; }
-    .logo-box { display: flex; align-items: center; }
-    .desc-box { border: 1px solid #888; padding: 7px 10px; font-size: 10px; line-height: 1.55; display: flex; flex-direction: column; justify-content: space-between; }
-    .addr-box { border: 1px solid #888; padding: 7px 10px; font-size: 10px; text-align: right; line-height: 1.55; }
-    .fiscal-box { border: 1px solid #888; padding: 7px 10px; font-size: 10px; margin-top: 6px; line-height: 1.55; }
-    .factura-title { font-size: 13px; font-weight: 800; text-align: center; margin-top: 8px; }
-    .factura-sub { font-size: 10px; text-align: center; margin-top: 2px; }
-    .pedido-row { display: flex; justify-content: flex-end; gap: 40px; font-size: 10px; margin-bottom: 6px; font-weight: 600; }
-    .client-section { border: 1px solid #888; padding: 8px 12px; margin-bottom: 10px; font-size: 10.5px; line-height: 1.8; }
+    .company-name { font-size: 16px; font-weight: 900; text-align: center; margin-bottom: 8px; letter-spacing: 0.5px; }
+    /* Header: left col = logo+desc, center = factura label, right = addr+fiscal */
+    .header { display: grid; grid-template-columns: 155px 1fr 195px; gap: 0; margin-bottom: 8px; }
+    .left-col { display: flex; flex-direction: column; }
+    .logo-box { display: flex; align-items: center; padding-bottom: 4px; }
+    .desc-box { border: 1px solid #555; padding: 6px 8px; font-size: 9.5px; line-height: 1.5; font-weight: 600; flex: 1; }
+    .center-col { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 12px; }
+    .factura-title { font-size: 15px; font-weight: 900; text-align: center; color: #111; }
+    .factura-sub { font-size: 11px; font-weight: 700; text-align: center; margin-top: 3px; }
+    .right-col { display: flex; flex-direction: column; gap: 0; }
+    .addr-box { border: 1px solid #555; padding: 6px 8px; font-size: 9.5px; text-align: right; line-height: 1.5; font-weight: 600; }
+    .fiscal-box { padding: 6px 8px; font-size: 9.5px; text-align: right; line-height: 1.7; border: 1px solid #555; border-top: none; }
+    .pedido-row { display: flex; justify-content: flex-end; gap: 40px; font-size: 10px; margin-bottom: 5px; font-weight: 700; }
+    .client-section { border: 1px solid #777; padding: 7px 10px; margin-bottom: 8px; font-size: 10px; line-height: 1.75; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    col.c-cod  { width: 7%; }
+    col.c-cod  { width: 8%; }
     col.c-cant { width: 6%; }
-    col.c-blt  { width: 6%; }
+    col.c-blt  { width: 7%; }
     col.c-ref  { width: 5%; }
-    col.c-desc { width: 22%; }
-    col.c-pre  { width: 10%; }
+    col.c-desc { width: 16%; }
+    col.c-pre  { width: 11%; }
     col.c-des  { width: 10%; }
-    col.c-itb  { width: 8%; }
-    col.c-pn   { width: 13%; }
-    col.c-tn   { width: 13%; }
-    th { background: #f0f0f0; border: 1px solid #666; padding: 5px 4px; font-size: 9.5px; text-align: center; white-space: nowrap; }
-    td { border: 1px solid #aaa; padding: 5px 5px; font-size: 10px; vertical-align: top; }
+    col.c-itb  { width: 9%; }
+    col.c-pn   { width: 14%; }
+    col.c-tn   { width: 14%; }
+    th { background: #ebebeb; border: 1px solid #555; padding: 5px 3px; font-size: 9px; text-align: center; white-space: nowrap; }
+    td { border: 1px solid #aaa; padding: 4px 4px; font-size: 9.5px; vertical-align: top; overflow: hidden; }
     td.desc { white-space: normal; word-break: break-word; line-height: 1.4; }
     td.num  { text-align: right; white-space: nowrap; }
     td.ctr  { text-align: center; white-space: nowrap; }
-    .totals-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 10px; }
+    .totals-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 8px; }
     .totals-table { border-collapse: collapse; }
-    .totals-table td { border: none; padding: 3px 8px; font-size: 10.5px; text-align: right; white-space: nowrap; }
+    .totals-table td { border: none; padding: 3px 8px; font-size: 10px; text-align: right; white-space: nowrap; overflow: visible; }
     .totals-table td:first-child { text-align: left; }
-    .totals-table tr:last-child td { font-weight: 800; font-size: 11px; border-top: 1.5px solid #333; padding-top: 5px; }
-    .sig-row { display: flex; justify-content: space-around; margin-top: 40px; }
-    .sig-box { text-align: center; border-top: 1px solid #333; padding-top: 5px; width: 200px; font-size: 10px; }
-    .footer-logos { display: flex; justify-content: center; gap: 50px; margin-top: 20px; align-items: center; }
+    .totals-table tr:last-child td { font-weight: 900; font-size: 11px; border-top: 1.5px solid #333; padding-top: 5px; }
+    .sig-row { display: flex; justify-content: space-around; margin-top: 36px; }
+    .sig-box { text-align: center; border-top: 1px solid #333; padding-top: 4px; width: 200px; font-size: 10px; }
+    .footer-logos { display: flex; justify-content: center; gap: 50px; margin-top: 18px; align-items: center; }
     .footer-logo { font-size: 20px; font-weight: 900; }
     .footer-logo.linumax { color: #e63946; }
     .footer-logo.haojue { color: #1d3557; }
@@ -411,15 +441,15 @@ ordersRouter.get('/:id/final-invoice', permitir('cajero', 'administrador', 'vend
   </head><body>
   <div class="company-name">IMPORTADORA REPUESTOS CALCAÑO SRL</div>
   <div class="header">
-    <div class="logo-box">${irc_svg}</div>
-    <div class="desc-box">
-      <div>COMERCIALIZACION Y DISTRIBUCION DE REPUESTOS ORIGINALES Y DE ALTA CALIDAD PARA MOTOCICLETAS</div>
-      <div>
-        <div class="factura-title">FACTURA</div>
-        <div class="factura-sub">VALIDA PARA CREDITO FISCAL</div>
-      </div>
+    <div class="left-col">
+      <div class="logo-box">${irc_svg}</div>
+      <div class="desc-box">COMERCIALIZACION Y DISTRIBUCION DE REPUESTOS ORIGINALES Y DE ALTA CALIDAD PARA MOTOCICLETAS</div>
     </div>
-    <div>
+    <div class="center-col">
+      <div class="factura-title">FACTURA</div>
+      <div class="factura-sub">VALIDA PARA CREDITO FISCAL</div>
+    </div>
+    <div class="right-col">
       <div class="addr-box">VILLA MAGDALENA SAN PEDRO<br/>DE MACORIS<br/>RNC: 130716171</div>
       <div class="fiscal-box">
         <div>FECHA: ${fechaDoc}</div>
