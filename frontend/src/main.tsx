@@ -316,6 +316,8 @@ function App() {
   const [showNuevoProdCompra, setShowNuevoProdCompra] = useState(false);
   const [nuevoProdCompra, setNuevoProdCompra] = useState<any>({ codigo: '', nombre: '', marca: '', medida: '', costo: 0, precio: 0, lleva_itbis: true, itbis_porcentaje: 18, categoria: '', suplidor_principal_id: '' });
   const [guardandoProdCompra, setGuardandoProdCompra] = useState(false);
+  const [buscarProdCompra, setBuscarProdCompra] = useState('');
+  const [showProdDropdown, setShowProdDropdown] = useState(false);
   const [editandoSuplidor, setEditandoSuplidor] = useState<any>(null);
   const [cxcCobroModal, setCxcCobroModal] = useState<any>(null);
   const [cxcCobroMonto, setCxcCobroMonto] = useState('');
@@ -3781,11 +3783,47 @@ function App() {
             <div style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px', marginBottom: 12, border: '1px solid #e2e8f0' }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>Agregar producto a la compra</p>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Producto</label>
-                  <select style={{ width: '100%' }} value={itemCompra.producto_id} onChange={(e) => setItemCompra((s: any) => ({ ...s, producto_id: e.target.value }))}>
-                    <option value="">— Buscar producto —</option>
-                    {productos.map((p) => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
-                  </select></div>
+                <div style={{ position: 'relative' }}>
+                  <label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Producto</label>
+                  <input
+                    style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: `1px solid ${itemCompra.producto_id ? '#16a34a' : '#d1d5db'}`, fontSize: 13, boxSizing: 'border-box' }}
+                    placeholder="🔍 Buscar por código o nombre..."
+                    value={buscarProdCompra}
+                    onFocus={() => setShowProdDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowProdDropdown(false), 180)}
+                    onChange={(e) => { setBuscarProdCompra(e.target.value); setItemCompra((s: any) => ({ ...s, producto_id: '' })); setShowProdDropdown(true); }}
+                  />
+                  {itemCompra.producto_id && (
+                    <div style={{ fontSize: 10, color: '#16a34a', marginTop: 2 }}>
+                      ✓ {productos.find((p) => p.id === itemCompra.producto_id)?.nombre}
+                    </div>
+                  )}
+                  {showProdDropdown && (
+                    <div style={{ position: 'absolute', zIndex: 999, top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 240, overflowY: 'auto', marginTop: 2 }}>
+                      {(() => {
+                        const q = buscarProdCompra.toLowerCase().trim();
+                        const filtrados = q
+                          ? productos.filter((p) => `${p.codigo} ${p.nombre} ${p.marca ?? ''}`.toLowerCase().includes(q)).slice(0, 30)
+                          : productos.slice(0, 30);
+                        if (filtrados.length === 0) return <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 13 }}>Sin resultados para "{buscarProdCompra}"</div>;
+                        return filtrados.map((p) => (
+                          <div key={p.id}
+                            style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #f1f5f9', background: itemCompra.producto_id === p.id ? '#eff6ff' : undefined }}
+                            onMouseDown={() => {
+                              setItemCompra((s: any) => ({ ...s, producto_id: p.id, costo_unitario: Number(p.costo ?? 0), itbis_tasa: Number(p.itbis_tasa ?? 0) }));
+                              setBuscarProdCompra(`${p.codigo} — ${p.nombre}`);
+                              setShowProdDropdown(false);
+                            }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b', marginRight: 6 }}>{p.codigo}</span>
+                            <strong>{p.nombre}</strong>
+                            {p.marca && <span style={{ color: '#94a3b8', fontSize: 11, marginLeft: 6 }}>{p.marca}</span>}
+                            <span style={{ float: 'right', color: '#16a34a', fontSize: 11 }}>RD$ {Number(p.costo ?? 0).toFixed(2)}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
                 <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Cantidad</label>
                   <input style={{ width: '100%' }} type="number" min="1" value={itemCompra.cantidad} onChange={(e) => setItemCompra((s: any) => ({ ...s, cantidad: Number(e.target.value) }))} /></div>
                 <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Costo unitario (RD$)</label>
@@ -3800,6 +3838,7 @@ function App() {
                     if (!p) { toast('warn', 'Selecciona un producto'); return; }
                     setNuevaCompra((s: any) => ({ ...s, items: [...s.items, { ...itemCompra, descripcion: p.nombre }] }));
                     setItemCompra((s: any) => ({ ...s, producto_id: '', cantidad: 1, costo_unitario: 0, descuento_monto: 0 }));
+                    setBuscarProdCompra('');
                   }}>+ Agregar</button>
               </div>
 
