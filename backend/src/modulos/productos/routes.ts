@@ -51,10 +51,21 @@ productosRouter.post('/', permitir('administrador'), (req, res) => {
   const precioBase = Number(d.precio);
   const precioNegocio1 = Number(d.precio_negocio_1 ?? precioBase);
   const precioNegocio2 = Number(d.precio_negocio_2 ?? precioNegocio1);
+  const existenciaInicial = Number(d.existencia_inicial ?? d.existencia ?? 0);
   db.prepare(`INSERT INTO productos(id,codigo,nombre,descripcion,categoria,ubicacion,imagen_url,costo,precio,precio_negocio_1,precio_negocio_2,itbis_tasa,existencia,estado,tipo,marca,medida,lleva_itbis,margen,itbis_porcentaje,existencia_minima,cantidad_a_ordenar,codigo_barras,cuenta_contable,referencia,uso_notas,suplidor_principal_id,fecha_creacion,fecha_actualizacion)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, d.codigo, d.nombre, d.descripcion ?? '', d.categoria ?? null, d.ubicacion ?? '', d.imagen_url ?? '', Number(d.costo ?? 0), precioBase, precioNegocio1, precioNegocio2, Number(d.itbis_tasa ?? 0), Number(d.existencia ?? 0), 'activo', d.tipo ?? '', d.marca ?? '', d.medida ?? '', d.lleva_itbis ? 1 : 0, Number(d.margen ?? 0), Number(d.itbis_porcentaje ?? 18), Number(d.existencia_minima ?? 0), Number(d.cantidad_a_ordenar ?? 0), d.codigo_barras ?? '', d.cuenta_contable ?? '', d.referencia ?? '', d.uso_notas ?? '', d.suplidor_principal_id ?? null, now, now);
-  registrarAuditoria('producto', id, 'crear', `Producto ${d.codigo} creado`, usuario?.id);
+    .run(id, d.codigo, d.nombre, d.descripcion ?? '', d.categoria ?? null, d.ubicacion ?? '', d.imagen_url ?? '', Number(d.costo ?? 0), precioBase, precioNegocio1, precioNegocio2, Number(d.itbis_tasa ?? 0), existenciaInicial, 'activo', d.tipo ?? '', d.marca ?? '', d.medida ?? '', d.lleva_itbis ? 1 : 0, Number(d.margen ?? 0), Number(d.itbis_porcentaje ?? 18), Number(d.existencia_minima ?? 0), Number(d.cantidad_a_ordenar ?? 0), d.codigo_barras ?? '', d.cuenta_contable ?? '', d.referencia ?? '', d.uso_notas ?? '', d.suplidor_principal_id ?? null, now, now);
+
+  if (existenciaInicial > 0 && d.sucursal_id_inicial) {
+    db.prepare(`INSERT INTO inventario_sucursal(id,sucursal_id,producto_id,stock,fecha_creacion,fecha_actualizacion)
+      VALUES(?,?,?,?,?,?) ON CONFLICT(sucursal_id,producto_id) DO UPDATE SET stock=stock+excluded.stock, fecha_actualizacion=excluded.fecha_actualizacion`)
+      .run(uuid(), d.sucursal_id_inicial, id, existenciaInicial, now, now);
+    db.prepare(`INSERT INTO movimientos_inventario(id,sucursal_id,producto_id,cantidad_delta,tipo,referencia_tipo,referencia_id,usuario_id,fecha_creacion)
+      VALUES(?,?,?,?,?,?,?,?,?)`)
+      .run(uuid(), d.sucursal_id_inicial, id, existenciaInicial, 'entrada_manual', 'creacion_producto', id, usuario?.id ?? null, now);
+  }
+
+  registrarAuditoria('producto', id, 'crear', `Producto ${d.codigo} creado con existencia inicial ${existenciaInicial}`, usuario?.id);
   res.status(201).json({ id });
 });
 

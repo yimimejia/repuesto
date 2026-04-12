@@ -309,7 +309,7 @@ function App() {
 
   const NUEVOCLUB_BLANK = { codigo: '', nombre: '', cedula_rnc: '', representante: '', direccion: '', correo: '', fecha_nacimiento: '', telefono_1: '', telefono_2: '', limite_credito: 0, limite_tiempo_dias: 30, tipo_cliente: '', estatus_credito: 'cerrado', porcentaje_descuento: 0, tipo_comprobante_fiscal: 'consumidor_final', en_programa_fidelidad: false };
   const [nuevoCliente, setNuevoCliente] = useState<any>(NUEVOCLUB_BLANK);
-  const [nuevoProducto, setNuevoProducto] = useState<any>({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' });
+  const [nuevoProducto, setNuevoProducto] = useState<any>({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '', cantidad_inicial: 0 });
   const [nuevaCompra, setNuevaCompra] = useState<any>({ suplidor_id: '', sucursal_id: '', numero_factura: '', numero_ncf: '', fecha_factura: '', fecha_vencimiento: '', condicion_compra: 'contado', estado_pago: 'pendiente', observaciones: '', items: [] as any[] });
   const [itemCompra, setItemCompra] = useState<any>({ producto_id: '', cantidad: 1, costo_unitario: 0, itbis_tasa: 0.18, descuento_monto: 0 });
   const [modalCompra, setModalCompra] = useState(false);
@@ -878,8 +878,14 @@ function App() {
   async function crearProducto() {
     let imgUrl = '';
     if (imagenAddFile) { imgUrl = await subirImagenProducto(imagenAddFile); setImagenAddFile(null); setImagenAddPreview(''); }
-    await api('/productos', token, { method: 'POST', body: JSON.stringify({ ...nuevoProducto, imagen_url: imgUrl, itbis_tasa: Number(nuevoProducto.itbis_porcentaje || 0) / 100 }) });
-    toast('ok', 'Producto creado');
+    await api('/productos', token, { method: 'POST', body: JSON.stringify({
+      ...nuevoProducto,
+      imagen_url: imgUrl,
+      itbis_tasa: Number(nuevoProducto.itbis_porcentaje || 0) / 100,
+      existencia_inicial: Number(nuevoProducto.cantidad_inicial ?? 0),
+      sucursal_id_inicial: sucursalId,
+    }) });
+    toast('ok', `Producto creado${Number(nuevoProducto.cantidad_inicial) > 0 ? ` — ${nuevoProducto.cantidad_inicial} und en existencia` : ''}`);
     await cargarTodo();
   }
 
@@ -1627,6 +1633,11 @@ function App() {
       <div><label>Precio negocio #2 (RD$)</label><input type="number" placeholder="0.00" value={data.precio_negocio_2 || 0} onChange={(e) => onChange('precio_negocio_2', Number(e.target.value))} /></div>
       <div><label>% ITBIS (0 si exento)</label><input type="number" placeholder="18" value={data.itbis_porcentaje ?? 18} onChange={(e) => onChange('itbis_porcentaje', Number(e.target.value))} /></div>
       <div><label>Código de barras</label><input placeholder="Ej: 7896543210123" value={data.codigo_barras || ''} onChange={(e) => onChange('codigo_barras', e.target.value)} /></div>
+      <div>
+        <label>Cantidad en existencia</label>
+        <input type="number" min="0" step="1" placeholder="0" value={data.cantidad_inicial ?? 0} onChange={(e) => onChange('cantidad_inicial', Number(e.target.value))} />
+        <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Inventario inicial que tienes en stock ahora</div>
+      </div>
       <div><label>Existencia mínima</label><input type="number" placeholder="Cantidad mínima para alerta" value={data.existencia_minima || 0} onChange={(e) => onChange('existencia_minima', Number(e.target.value))} /></div>
       <div><label>Referencia / Número OEM</label><input placeholder="Ej: REF-12345" value={data.referencia || ''} onChange={(e) => onChange('referencia', e.target.value)} /></div>
       <div>
@@ -3661,7 +3672,7 @@ function App() {
         <article className="panel-card">
           <div className="panel-head">
             <h3>Productos</h3>
-            <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductosPage(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
+            <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '', cantidad_inicial: 0 }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductosPage(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
           </div>
           <table className="table-premium">
             <thead><tr><th></th><th>Código</th><th>Descripción</th><th>Categoría</th><th>Marca</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
@@ -3967,7 +3978,7 @@ function App() {
             <div className="panel-head">
               <h3>Inventario — {sucursales.find((s) => s.id === sucursalInvSeleccionada)?.nombre}</h3>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '' }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductoInv(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
+                <button className="btn btn-primary" onClick={() => { setNuevoProducto({ codigo: '', tipo: '', nombre: '', descripcion: '', marca: '', medida: '', costo: 0, lleva_itbis: true, margen: 0, precio: 0, precio_negocio_1: 0, precio_negocio_2: 0, itbis_porcentaje: 18, existencia_minima: 0, cantidad_a_ordenar: 0, ubicacion: '', categoria: '', codigo_barras: '', cuenta_contable: '', referencia: '', uso_notas: '', suplidor_principal_id: '', imagen_url: '', cantidad_inicial: 0 }); setImagenAddFile(null); setImagenAddPreview(''); setModalProductoInv(true); setQuickAddCat(false); setQuickAddSup(false); }}>+ Agregar Producto</button>
                 <button className="btn btn-ghost" onClick={() => setSucursalInvSeleccionada('')}>← Volver</button>
               </div>
             </div>
