@@ -316,6 +316,7 @@ function App() {
   const [showNuevoProdCompra, setShowNuevoProdCompra] = useState(false);
   const [nuevoProdCompra, setNuevoProdCompra] = useState<any>({ codigo: '', nombre: '', marca: '', medida: '', costo: 0, precio: 0, lleva_itbis: true, itbis_porcentaje: 18, categoria: '', suplidor_principal_id: '' });
   const [guardandoProdCompra, setGuardandoProdCompra] = useState(false);
+  const [showNuevoSuplidorCompra, setShowNuevoSuplidorCompra] = useState(false);
   const [buscarProdCompra, setBuscarProdCompra] = useState('');
   const [showProdDropdown, setShowProdDropdown] = useState(false);
   const [editandoSuplidor, setEditandoSuplidor] = useState<any>(null);
@@ -3947,12 +3948,44 @@ function App() {
               <p style={{ color: '#94a3b8', textAlign: 'center', padding: '12px 0', fontSize: 13 }}>Sin productos agregados aún</p>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setModalCompra(false)}>Cancelar</button>
-              <button className="btn btn-primary" disabled={nuevaCompra.items.length === 0}
-                onClick={() => crearCompra().then(() => setModalCompra(false)).catch((e) => toast('error', e.message))}>
-                💾 Registrar compra ({nuevaCompra.items.length} producto{nuevaCompra.items.length !== 1 ? 's' : ''})
+            {/* ── Mini-formulario agregar suplidor ── */}
+            {showNuevoSuplidorCompra && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 10 }}>➕ Nuevo Suplidor</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Código</label>
+                    <input placeholder="SUP-001" value={nuevoSuplidor.codigo} onChange={(e) => setNuevoSuplidor((s: any) => ({ ...s, codigo: e.target.value }))} /></div>
+                  <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Nombre comercial *</label>
+                    <input placeholder="Nombre del suplidor" value={nuevoSuplidor.nombre_comercial} onChange={(e) => setNuevoSuplidor((s: any) => ({ ...s, nombre_comercial: e.target.value }))} /></div>
+                  <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>RNC / Cédula</label>
+                    <input placeholder="000-0000000-0" value={nuevoSuplidor.rnc_cedula} onChange={(e) => setNuevoSuplidor((s: any) => ({ ...s, rnc_cedula: e.target.value }))} /></div>
+                  <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Teléfono</label>
+                    <input placeholder="809-000-0000" value={nuevoSuplidor.telefono} onChange={(e) => setNuevoSuplidor((s: any) => ({ ...s, telefono: e.target.value }))} /></div>
+                  <div><label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 2 }}>Persona de contacto</label>
+                    <input placeholder="Representante" value={nuevoSuplidor.contacto} onChange={(e) => setNuevoSuplidor((s: any) => ({ ...s, contacto: e.target.value }))} /></div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+                    <button className="btn btn-primary" style={{ fontSize: 12 }}
+                      onClick={() => crearSuplidor().then(() => { setShowNuevoSuplidorCompra(false); setNuevoSuplidor({ codigo: '', nombre_comercial: '', razon_social: '', rnc_cedula: '', telefono: '', correo: '', direccion: '', contacto: '', observaciones: '' }); }).catch((e) => toast('error', e.message))}>
+                      ✅ Guardar suplidor
+                    </button>
+                    <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowNuevoSuplidorCompra(false)}>Cancelar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }}
+                onClick={() => { setShowNuevoSuplidorCompra((v) => !v); setNuevoSuplidor({ codigo: '', nombre_comercial: '', razon_social: '', rnc_cedula: '', telefono: '', correo: '', direccion: '', contacto: '', observaciones: '' }); }}>
+                {showNuevoSuplidorCompra ? '✕ Cerrar' : '🏢 Agregar suplidor'}
               </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost" onClick={() => setModalCompra(false)}>Cancelar</button>
+                <button className="btn btn-primary" disabled={nuevaCompra.items.length === 0}
+                  onClick={() => crearCompra().then(() => setModalCompra(false)).catch((e) => toast('error', e.message))}>
+                  💾 Registrar compra ({nuevaCompra.items.length} producto{nuevaCompra.items.length !== 1 ? 's' : ''})
+                </button>
+              </div>
             </div>
           </div>
         </div>

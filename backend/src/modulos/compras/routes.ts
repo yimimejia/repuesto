@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { db } from '../../db/connection.js';
 import { auth, permitir } from '../../shared/auth.js';
-import { ajustarInventario } from '../inventario/service.js';
 import { registrarAuditoria } from '../../shared/auditoria.js';
 import { exigirSucursalUsuario } from '../../shared/sucursales.js';
 
@@ -59,16 +58,6 @@ comprasRouter.post('/', (req, res) => {
       const desc = Number(i.descuento_monto ?? 0);
       const tl = base + it - desc;
       ins.run(uuid(), id, i.producto_id, i.descripcion ?? '', Number(i.cantidad), Number(i.costo_unitario), Number(i.itbis_tasa ?? 0), it, desc, base, tl);
-
-      ajustarInventario({
-        sucursalId: d.sucursal_id,
-        productoId: i.producto_id,
-        cantidadDelta: Number(i.cantidad),
-        tipo: 'entrada_compra',
-        referenciaTipo: 'compra',
-        referenciaId: id,
-        usuarioId: usuario.id,
-      });
     }
   });
 
@@ -150,10 +139,6 @@ comprasRouter.put('/:id', (req, res) => {
   const total = subtotal + itbis - descuento;
 
   const tx = db.transaction(() => {
-    const old = db.prepare('SELECT * FROM detalle_compras WHERE compra_id=?').all(compra.id) as any[];
-    for (const o of old) {
-      ajustarInventario({ sucursalId: compra.sucursal_id, productoId: o.producto_id, cantidadDelta: -Number(o.cantidad), tipo: 'reversa_compra', referenciaTipo: 'compra_edicion', referenciaId: compra.id, usuarioId: usuario.id });
-    }
     db.prepare('DELETE FROM detalle_compras WHERE compra_id=?').run(compra.id);
 
     const ins = db.prepare(`INSERT INTO detalle_compras(id,compra_id,producto_id,descripcion,cantidad,costo_unitario,itbis_tasa,itbis_monto,descuento_monto,subtotal_linea,total_linea)
@@ -163,7 +148,6 @@ comprasRouter.put('/:id', (req, res) => {
       const it = base * Number(i.itbis_tasa ?? 0);
       const desc = Number(i.descuento_monto ?? 0);
       ins.run(uuid(), compra.id, i.producto_id, i.descripcion ?? '', Number(i.cantidad), Number(i.costo_unitario), Number(i.itbis_tasa ?? 0), it, desc, base, base + it - desc);
-      ajustarInventario({ sucursalId: compra.sucursal_id, productoId: i.producto_id, cantidadDelta: Number(i.cantidad), tipo: 'entrada_compra', referenciaTipo: 'compra_edicion', referenciaId: compra.id, usuarioId: usuario.id });
     }
 
     db.prepare('UPDATE compras SET numero_factura=?, numero_ncf=?, fecha_factura=?, fecha_vencimiento=?, condicion_compra=?, estado_pago=?, observaciones=?, subtotal=?, itbis_total=?, descuento_total=?, total=?, fecha_actualizacion=? WHERE id=?')
@@ -171,7 +155,7 @@ comprasRouter.put('/:id', (req, res) => {
   });
 
   tx();
-  registrarAuditoria('compra', compra.id, 'editar', 'Compra editada con recálculo y ajuste de inventario', usuario.id);
+  registrarAuditoria('compra', compra.id, 'editar', 'Compra editada', usuario.id);
   res.json({ ok: true, total });
 });
 
@@ -185,25 +169,8 @@ comprasRouter.post('/:id/anular', (req, res) => {
   }
   if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
   if (compra.estado === 'anulada') return res.status(400).json({ error: 'Compra ya anulada' });
-  const detalles = db.prepare('SELECT * FROM detalle_compras WHERE compra_id=?').all(req.params.id) as any[];
-
-  const tx = db.transaction(() => {
-    for (const d of detalles) {
-      ajustarInventario({
-        sucursalId: compra.sucursal_id,
-        productoId: d.producto_id,
-        cantidadDelta: -Number(d.cantidad),
-        tipo: 'reversa_compra',
-        referenciaTipo: 'compra_anulada',
-        referenciaId: compra.id,
-        usuarioId: usuario.id,
-      });
-    }
-    db.prepare("UPDATE compras SET estado='anulada', fecha_actualizacion=? WHERE id=?").run(ahora(), req.params.id);
-  });
-
-  tx();
-  registrarAuditoria('compra', req.params.id, 'anular', 'Compra anulada con reversa de inventario', usuario.id);
+  db.prepare("UPDATE compras SET estado='anulada', fecha_actualizacion=? WHERE id=?").run(ahora(), req.params.id);
+  registrarAuditoria('compra', req.params.id, 'anular', 'Compra anulada', usuario.id);
   res.json({ ok: true });
 });
 
