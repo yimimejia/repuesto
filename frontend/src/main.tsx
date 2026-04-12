@@ -1611,7 +1611,11 @@ function App() {
 
   const formProductoFields = (data: any, onChange: (k: string, v: any) => void) => (
     <div className="quick-form" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-      <div><label>Código *</label><input placeholder="Ej: P-001" value={data.codigo || ''} onChange={(e) => onChange('codigo', e.target.value)} /></div>
+      <div><label>Código *</label><input placeholder="Ej: P-001" value={data.codigo || ''} onChange={(e) => {
+        const v = e.target.value;
+        onChange('codigo', v);
+        if (!data.codigo_barras || data.codigo_barras === data.codigo) onChange('codigo_barras', v);
+      }} /></div>
       <div><label>Descripción / Nombre *</label><input placeholder="Nombre del producto" value={data.nombre || ''} onChange={(e) => onChange('nombre', e.target.value)} /></div>
       <div><label>Tipo</label><input placeholder="Repuesto, accesorio, líquido..." value={data.tipo || ''} onChange={(e) => onChange('tipo', e.target.value)} /></div>
       <div><label>Marca</label><input placeholder="Ej: NGK, Bosch, ACDelco" value={data.marca || ''} onChange={(e) => onChange('marca', e.target.value)} /></div>
