@@ -1,0 +1,9 @@
+
+> repuestos-calcano-pos-backend@0.1.0 dev
+> tsx watch src/server.ts
+
+[1G[0KServidor POS local escuchando en puerto 3000
+[90m3:08:54 PM[39m [96m[tsx][39m [95mchange[39m in [92m./src/modulos/orders/routes.ts[39m [33mRestarting...[39m
+cServidor POS local escuchando en puerto 3000
+[90m3:09:09 PM[39m [96m[tsx][39m [95mchange[39m in [92m./src/modulos/orders/routes.ts[39m [33mRestarting...[39m
+cServidor POS local escuchando en puerto 3000
